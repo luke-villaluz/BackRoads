@@ -4,3 +4,4 @@ __pycache__/
 .env
 data_cache/
 outputs/
+PROJECT_CONTEXT.md

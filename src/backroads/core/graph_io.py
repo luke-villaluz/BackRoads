@@ -6,11 +6,25 @@ TODO:
 - Implement load from cache if file exists
 """
 
-from pathlib import Path
-import osmnx as ox  # already installed
+import logging
+import osmnx as ox
+from backroads.config import GRAPH_PATH, ensure_directories, LOG_LEVEL
 
-GRAPH_PATH = Path("data_cache/slo_drive.graphml")
+_logger = logging.getLogger(__name__)
+if not logging.getLogger().handlers:
+    logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
 
 def load_graph():
     """Load (and later, download) the SLO County graph."""
-    pass
+    ensure_directories()
+    if GRAPH_PATH.exists():
+        _logger.info("Loading cached graph from %s", GRAPH_PATH)
+        return ox.load_graphml(GRAPH_PATH)
+    _logger.info("Downloading graph for San Luis Obispo County")
+    graph = ox.graph_from_place(
+        "San Luis Obispo County, California, USA",
+        network_type="drive",
+    )
+    ox.save_graphml(graph, GRAPH_PATH)
+    _logger.info("Saved graph to %s", GRAPH_PATH)
+    return graph

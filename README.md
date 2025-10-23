@@ -75,13 +75,13 @@ print(f"Graph ready: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} 
 PY
 
 # 2. Compute a fastest route between two San Luis Obispo coordinates
-python - <<'PY'
-from backroads.core.routing import find_fastest_route
-origin = (35.2828, -120.6596)        # Replace with your origin (lat, lon)
-destination = (35.1810, -120.7340)  # Replace with your destination (lat, lon)
-result = find_fastest_route(origin, destination)
-print("Node sequence:", result["nodes"])
-print("Travel time (minutes):", result["travel_time_seconds"] / 60)
+python - <<'PY';
+from backroads.core.routing import find_fastest_route;
+origin = (35.2828, -120.6596);        # Replace with your origin (lat, lon)
+destination = (35.1810, -120.7340);  # Replace with your destination (lat, lon)
+result = find_fastest_route(origin, destination);
+print("Node sequence:", result["nodes"]);
+print("Travel time (minutes):", result["travel_time_seconds"] / 60);
 PY
 Repo Layout
 configs/ — YAML scenic profiles (empty starter directory)

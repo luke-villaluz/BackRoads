@@ -38,7 +38,7 @@ def add_scenic_weights(graph) -> None:
 
     # base scenic values for different highway types
     SCENIC_BY_TYPE = {
-        "motorway": 0.15,
+        "motorway": 0.05,
         "trunk": 0.25,
         "primary": 0.40,
         "secondary": 0.55,

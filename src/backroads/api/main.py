@@ -3,9 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Query
 from typing import Optional
 from pydantic import BaseModel
-from backroads.core.graph import load_graph
-from backroads.core.weighting import add_travel_time, add_scenic_weights, add_composite_cost
-from backroads.core.routing import find_route
+from backroads.core.data.graph import load_graph
+from backroads.core.routing.weighting import add_travel_time, add_scenic_weights, add_composite_cost
+from backroads.core.routing.pathfinding import find_route
 import networkx as nx
 
 app = FastAPI(
@@ -85,7 +85,7 @@ def route(
         time_sum += float(data.get("travel_time", 0.0))
 
     # Get street names for the route
-    from backroads.core.main import get_street_distances_from_path
+    from main import get_street_distances_from_path
     street_segments = get_street_distances_from_path(graph, result["nodes"])
 
     # Map cardinal direction to symbol

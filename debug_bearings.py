@@ -9,10 +9,10 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
-from backroads.core.graph import load_graph
-from backroads.core.weighting import add_travel_time, add_scenic_weights, add_composite_cost
-from backroads.core.candidates import k_shortest_routes, rank_routes
-from backroads.core.main import calculate_bearing, get_turn_direction
+from backroads.core.data.graph import load_graph
+from backroads.core.routing.weighting import add_travel_time, add_scenic_weights, add_composite_cost
+from backroads.core.routing.candidates import k_shortest_routes, rank_routes
+from main import calculate_bearing, get_turn_direction
 
 def debug_route_bearings(graph, path):
     """Debug function to show bearings and turn calculations."""

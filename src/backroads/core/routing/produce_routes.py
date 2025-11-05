@@ -1,23 +1,14 @@
 #!/usr/bin/env python3
 """
-Simple Scenic Routes with Street Names
-
-This script uses k_shortest_routes and rank_routes, then shows the street names 
-for each ranked route so you can see what path it chose.
+Produce Routes
+This module handles finding and displaying ranked routes with street names.
 """
 
-import sys
-from pathlib import Path
-
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent / 'src'))
-
-from backroads.core.graph import load_graph
-from backroads.core.weighting import add_travel_time, add_scenic_weights, add_composite_cost
-from backroads.core.candidates import k_shortest_routes, rank_routes
-from backroads.core.main import print_route_street_names
-from visualize_route import visualize_route
-
+from backroads.core.data.graph import load_graph
+from backroads.core.routing.candidates import k_shortest_routes, rank_routes
+from backroads.core.routing.weighting import add_travel_time, add_scenic_weights, add_composite_cost
+from backroads.core.utils.streets import print_route_street_names
+from backroads.core.utils.visualize_route import visualize_route
 
 
 def find_and_show_ranked_routes(origin, destination, k=5, time_budget_factor=1.5):
@@ -69,17 +60,3 @@ def find_and_show_ranked_routes(origin, destination, k=5, time_budget_factor=1.5
         print("No routes found within time budget!")
     
     return ranked_routes
-
-
-def main():
-    """Main function with example usage."""
-    
-    # Example route: SLODOCO to Target
-    origin = (35.293683,-120.672025)      
-    destination = (35.252955,-120.684900) 
-
-    find_and_show_ranked_routes(origin, destination, k=5, time_budget_factor=100)
-
-
-if __name__ == "__main__":
-    main()

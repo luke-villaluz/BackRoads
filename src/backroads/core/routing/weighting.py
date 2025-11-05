@@ -1,4 +1,14 @@
 # weighting.py
+'''
+Weighting: 
+Contains functions for assigned edge weights and composite costs
+to the road network graph 
+
+Includes:
+    - Travel time: travel time between nodes 
+    - Scenic score: scenic weights between nodes
+    - Scenic cost: Calculating composite cost of scenery and time betweem nodes
+'''
 
 def add_travel_time(graph) -> None:
     """compute travel times of edges in seconds (different for different "highway" types)"""

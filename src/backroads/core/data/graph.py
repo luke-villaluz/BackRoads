@@ -1,6 +1,13 @@
 import osmnx as ox
 from backroads.config import GRAPH_PATH, ensure_directories
 
+
+"""
+graph.py
+
+Downloads the graph of SLO county from OpenStreetMaps
+
+"""
 def load_graph():
     ensure_directories()
     if GRAPH_PATH.exists():

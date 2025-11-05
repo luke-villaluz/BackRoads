@@ -2,6 +2,15 @@ import networkx as nx
 import osmnx as ox
 from math import radians, sin, cos, sqrt, atan2
 
+'''
+Pathfinding: 
+Finds a route between two coordinates using OpenStreetMap and NetworkX
+Uses the edge weights assigned by the weighting module 
+
+Algorithm: 
+    - nx.shortest_path defaults to Dijkstra’s
+'''
+
 # default weight is travel time, essentially just takes fastest route
 def find_route(origin, destination, graph, weight="scenic_cost"):
     """return shortest path between two (lat, lon) points (by travel time) """

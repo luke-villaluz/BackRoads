@@ -3,7 +3,7 @@ import osmnx as ox
 from math import radians, sin, cos, sqrt, atan2
 
 # default weight is travel time, essentially just takes fastest route
-def find_route(origin, destination, graph, weight="travel_time"):
+def find_route(origin, destination, graph, weight="scenic_cost"):
     """return shortest path between two (lat, lon) points (by travel time) """
     origin_node = _nearest_node(graph, origin)
     destination_node = _nearest_node(graph, destination)

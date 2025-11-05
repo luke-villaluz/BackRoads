@@ -10,11 +10,6 @@ TO KILL:
     ctrl + c 
 """
 
-# import sys
-# from pathlib import Path
-
-# sys.path.insert(0, str(Path(__file__).parent / "src"))
-
 from backroads.core.routing.produce_routes import find_and_show_ranked_routes
 
 def main():    

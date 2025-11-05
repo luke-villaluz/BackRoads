@@ -54,7 +54,6 @@ def _nearest_node(graph, point):
             raise ValueError("graph has no other nodes to connect to")
         return closest
 
-# shout out cursor
 def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Return great-circle distance in meters between two lat/lon points."""
     r = 6371000  # mean Earth radius in meters

@@ -1,13 +1,21 @@
 #!/usr/bin/env python3
 """
 Main script for showing scenic routes with street names.
+
+TO RUN: 
+    cd src 
+    python3 -m backroads.core.main
+
+TO KILL:
+    ctrl + c 
 """
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+# import sys
+# from pathlib import Path
 
-from src.backroads.core.routing.produce_routes import find_and_show_ranked_routes
+# sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+from backroads.core.routing.produce_routes import find_and_show_ranked_routes
 
 def main():    
     # Example route: SLODOCO to Target

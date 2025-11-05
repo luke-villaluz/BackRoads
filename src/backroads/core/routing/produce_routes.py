@@ -10,7 +10,6 @@ from backroads.core.routing.weighting import add_travel_time, add_scenic_weights
 from backroads.core.utils.streets import print_route_street_names
 from backroads.core.utils.visualize_route import visualize_route
 
-
 def find_and_show_ranked_routes(origin, destination, k=5, time_budget_factor=1.5):
     """
     Use k_shortest_routes and rank_routes, then print street names for each.

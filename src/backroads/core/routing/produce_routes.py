@@ -17,7 +17,7 @@ Produce Routes:
 '''
 
 # NOT kth shortest paths algo, this is literally returning more than 1 (k) routes
-def k_shortest_routes(
+def k_candidate_routes(
     graph: nx.MultiDiGraph,
     origin: Tuple[float, float],
     destination: Tuple[float, float],
@@ -106,8 +106,8 @@ def find_and_show_ranked_routes(origin, destination, k=5, time_budget_factor=1.5
     print(f"Finding routes from {origin} to {destination}...")
     
     # Step 1: k_shortest_routes
-    routes = k_shortest_routes(graph, origin, destination, weight="scenic_cost", k=k)
-    print(f"k_shortest_routes found: {len(routes)} routes")
+    routes = k_candidate_routes(graph, origin, destination, weight="scenic_cost", k=k)
+    print(f"k_candidate_routes found: {len(routes)} routes")
  
     # Step 2: rank_routes  
     ranked_routes = rank_routes(graph, routes, time_budget_factor=time_budget_factor)

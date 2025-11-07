@@ -9,9 +9,9 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
-from backroads.core.graph import load_graph
-from backroads.core.weighting import add_travel_time, add_scenic_weights, add_composite_cost
-from backroads.core.candidates import k_shortest_routes, rank_routes
+from backroads.core.data.graph import load_graph
+from backroads.core.routing.weighting import add_travel_time, add_scenic_weights, add_composite_cost
+from backroads.core.routing.produce_routes import k_candidate_routes, rank_routes
 from backroads.core.main import calculate_bearing, get_turn_direction
 
 def debug_route_bearings(graph, path):
@@ -79,7 +79,7 @@ def main():
     destination = (35.252955, -120.684900)
     
     # Get the top route
-    routes = k_shortest_routes(graph, origin, destination, weight="scenic_cost", k=5)
+    routes = k_candidate_routes(graph, origin, destination, weight="scenic_cost", k=5)
     ranked_routes = rank_routes(graph, routes, time_budget_factor=1.5)
     
     if ranked_routes:

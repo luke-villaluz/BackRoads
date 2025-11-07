@@ -85,7 +85,7 @@ def route(
         time_sum += float(data.get("travel_time", 0.0))
 
     # Get street names for the route
-    from backroads.core.main import get_street_distances_from_path
+    from backroads.core.utils.streets import get_street_distances_from_path
     street_segments = get_street_distances_from_path(graph, result["nodes"])
 
     # Map cardinal direction to symbol

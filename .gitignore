@@ -2,7 +2,6 @@
 __pycache__/
 *.pyc
 .env
-data_cache/
 outputs/
 PROJECT_CONTEXT.md
 cache/

@@ -60,17 +60,42 @@ def add_scenic_weights(graph) -> None:
         # you can add more if you find them later
     }
 
-    NATURAL_BY_TYPE = { #todo finish the natural types later
-        "motorway": 0.05,
-        "trunk": 0.25,
-        "primary": 0.40,
-        "secondary": 0.55,
-        "tertiary": 0.70,
-        "residential": 0.85,
-        "service": 0.70,
-        "unclassified": 0.90
-        # you can add more if you find them later
+    NATURAL_BY_TYPE = {
+        # Land & vegetation related
+        "grassland": None,
+        "heath": None,
+        "scrub": None,
+        "tree": None,
+        "tree_row": None,
+        "wood": None,
+
+        # Water related
+        "bay": None,
+        "beach": None,
+        "cape": None,
+        "coastline": None,
+
+        "hot_spring": None,
+        "spring": None,
+        "water": None,
+        "wetland": None,
+
+        # Geology related
+        "arch": None,
+        "bare_rock": None,
+        "cliff": None,
+        "dune": None,
+        "hill": None,
+        "peak": None,
+        "ridge": None,
+        "rock": None,
+        "saddle": None,
+        "sand": None,
+        "scree": None,
+        "stone": None,
+        "valley": None
     }
+
 
     # loop through every edge in graph
     count = 0

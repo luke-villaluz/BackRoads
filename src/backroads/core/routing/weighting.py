@@ -9,6 +9,7 @@ Includes:
     - Scenic score: scenic weights between nodes
     - Scenic cost: Calculating composite cost of scenery and time betweem nodes
 '''
+from backroads.core.data.graph import load_graph
 
 def add_travel_time(graph) -> None:
     """compute travel times of edges in seconds (different for different "highway" types)"""
@@ -59,8 +60,26 @@ def add_scenic_weights(graph) -> None:
         # you can add more if you find them later
     }
 
+    NATURAL_BY_TYPE = { #todo finish the natural types later
+        "motorway": 0.05,
+        "trunk": 0.25,
+        "primary": 0.40,
+        "secondary": 0.55,
+        "tertiary": 0.70,
+        "residential": 0.85,
+        "service": 0.70,
+        "unclassified": 0.90
+        # you can add more if you find them later
+    }
+
     # loop through every edge in graph
-    for _, _, data in graph.edges(data=True):
+    count = 0
+
+    for t, s, data in graph.edges(data=True):
+        count += 1
+        print(f"Processing edge {count}: {t} -> {s}")
+        if count == 10:
+            break
 
         # get highway type (sometimes list)
         hwy = data.get("highway")
@@ -69,6 +88,17 @@ def add_scenic_weights(graph) -> None:
 
         # assign a base scenic score, default to 0.5
         base_score = SCENIC_BY_TYPE.get(hwy, 0.5)
+
+        target = graph.nodes[t]
+        source = graph.nodes[s]
+        print(target)
+        print(source)
+        
+        for i in range(len(target.get("natural_types"))):
+            base_score += 0.05
+        
+        for i in range(len(source.get("natural_types"))):
+            base_score += 0.05
 
         # short road bonus (likely a local road)
         length_m = float(data.get("length", 0.0) or 0.0)
@@ -80,8 +110,47 @@ def add_scenic_weights(graph) -> None:
         # base_score += 0.15 * wiggle
 
         # clamp between 0 and 1
-        scenic = max(0.0, min(1.0, base_score))
-        data["scenic_score"] = scenic
+       
+        data["scenic_score"] = base_score
+
+    # simple standardization (z-score) across all edges' scenic_score
+    vals = []
+    edge_datas = []
+    for u, v, data in graph.edges(data=True):
+        if "scenic_score" in data:
+            edge_datas.append(data)
+            try:
+                vals.append(float(data["scenic_score"]))
+            except Exception:
+                vals.append(0.0)
+    print("\t\t VALS:",vals)
+
+    if vals:
+        mean = sum(vals) / len(vals)
+        # population std
+        var = sum((x - mean) ** 2 for x in vals) / len(vals)
+        std = var ** 0.5
+        print(f"Standardizing scenic_score: mean={mean:.6f}, std={std:.6f}")
+        # compute z-scores
+        if std > 0:
+            zscores = [ (orig - mean) / std for orig in vals ]
+        else:
+            zscores = [0.0 for _ in vals]
+
+        # min-max scale z-scores into [0,1]
+        minz = min(zscores)
+        maxz = max(zscores)
+        if maxz > minz:
+            scaled01 = [ (z - minz) / (maxz - minz) for z in zscores ]
+        else:
+            # all equal -> map to 0.5
+            scaled01 = [0.5 for _ in zscores]
+
+        print(f"Mapping z-scores to [0,1]: minz={minz:.6f}, maxz={maxz:.6f}")
+
+        for data, val in zip(edge_datas, scaled01):
+            data["scenic_score"] = float(val)
+            print(float(val))
 
 def add_composite_cost(graph, alpha: float = 0.6) -> None:
     """blend time and scenic into edge['scenic_cost']"""
@@ -90,3 +159,6 @@ def add_composite_cost(graph, alpha: float = 0.6) -> None:
         scenic = float(data.get("scenic_score", 0.5))
         # lower scenic_score should increase cost (less beautiful)
         data["scenic_cost"] = alpha * travel_time + (1 - alpha) * (1 - scenic)
+
+# graph = load_graph()
+# add_scenic_weights(graph)

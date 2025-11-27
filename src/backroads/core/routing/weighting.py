@@ -10,6 +10,31 @@ Includes:
     - Scenic cost: Calculating composite cost of scenery and time betweem nodes
 '''
 from backroads.core.data.graph import load_graph
+from typing import Optional, Dict, Any
+
+
+# Module-level defaults so callers (API) can present them to users
+DEFAULT_SCENIC_BY_TYPE = {
+    "motorway": 0.05,
+    "trunk": 0.25,
+    "primary": 0.40,
+    "secondary": 0.55,
+    "tertiary": 0.70,
+    "residential": 0.85,
+    "service": 0.70,
+    "unclassified": 0.90,
+}
+
+DEFAULT_NATURAL_BY_TYPE = {
+    "grassland": 0.5, "heath": 0.5, "scrub": 0.5, "tree": 0.5,
+    "tree_row": 0.5, "wood": 0.5, "bay": 0.5, "beach": 0.5,
+    "cape": 0.5, "coastline": 0.5, "hot_spring": 0.5, "spring": 0.5,
+    "water": 0.5, "wetland": 0.5, "arch": 0.5, "bare_rock": 0.5,
+    "cliff": 0.5, "dune": 0.5, "hill": 0.5, "peak": 0.5, "ridge": 0.5,
+    "rock": 0.5, "saddle": 0.5, "sand": 0.5, "scree": 0.5, "stone": 0.5,
+    "valley": 0.5
+}
+
 
 def add_travel_time(graph) -> None:
     """compute travel times of edges in seconds (different for different "highway" types)"""
@@ -44,146 +69,92 @@ def add_travel_time(graph) -> None:
         data["travel_time"] = travel_time
 
 
-def add_scenic_weights(graph) -> None:
-    """compute edge['scenic_score'] in [0,1] based on road type (and optional bonuses based off short (local) roads)"""
+def add_scenic_weights(graph, scenic_by_type: Optional[Dict[str, float]] = None, natural_by_type: Optional[Dict[str, Any]] = None) -> None:
+    """compute edge['scenic_score'] in [0,1] based on road type (and optional bonuses based off short (local) roads).
 
-    # base scenic values for different highway types
-    SCENIC_BY_TYPE = {
-        "motorway": 0.05,
-        "trunk": 0.25,
-        "primary": 0.40,
-        "secondary": 0.55,
-        "tertiary": 0.70,
-        "residential": 0.85,
-        "service": 0.70,
-        "unclassified": 0.90
-        # you can add more if you find them later
-    }
+    Accepts optional overrides for scenic_by_type and natural_by_type. If not provided,
+    default mappings are used (kept for backwards compatibility).
+    """
 
-    NATURAL_BY_TYPE = {
-        # Land & vegetation related
-        "grassland": None,
-        "heath": None,
-        "scrub": None,
-        "tree": None,
-        "tree_row": None,
-        "wood": None,
+    # use module-level defaults unless overrides were provided
+    SCENIC = scenic_by_type if scenic_by_type is not None else DEFAULT_SCENIC_BY_TYPE
+    NATURAL = natural_by_type if natural_by_type is not None else DEFAULT_NATURAL_BY_TYPE
 
-        # Water related
-        "bay": None,
-        "beach": None,
-        "cape": None,
-        "coastline": None,
-
-        "hot_spring": None,
-        "spring": None,
-        "water": None,
-        "wetland": None,
-
-        # Geology related
-        "arch": None,
-        "bare_rock": None,
-        "cliff": None,
-        "dune": None,
-        "hill": None,
-        "peak": None,
-        "ridge": None,
-        "rock": None,
-        "saddle": None,
-        "sand": None,
-        "scree": None,
-        "stone": None,
-        "valley": None
-    }
-
-
-    # loop through every edge in graph
-    count = 0
-
-    for t, s, data in graph.edges(data=True):
-        count += 1
-        print(f"Processing edge {count}: {t} -> {s}")
-        if count == 10:
-            break
-
-        # get highway type (sometimes list)
+    for u, v, data in graph.edges(data=True):
         hwy = data.get("highway")
         if isinstance(hwy, (list, tuple)):
             hwy = hwy[0]
+        base = float(SCENIC.get(hwy, 0.5))
 
-        # assign a base scenic score, default to 0.5
-        base_score = SCENIC_BY_TYPE.get(hwy, 0.5)
+    
+        naturals = []
+        naturals += graph.nodes[u].get("natural_types", []) or []
+        naturals += graph.nodes[v].get("natural_types", []) or []
 
-        target = graph.nodes[t]
-        source = graph.nodes[s]
-        print(target)
-        print(source)
-        
-        for i in range(len(target.get("natural_types"))):
-            base_score += 0.05
-        
-        for i in range(len(source.get("natural_types"))):
-            base_score += 0.05
+        nat_sum = 0.0
+        for nat in naturals:
+            if nat in NATURAL:
+                val = NATURAL[nat]
+                if val is not None:
+                    nat_sum += float(val)
 
-        # short road bonus (likely a local road)
-        length_m = float(data.get("length", 0.0) or 0.0)
-        if length_m < 120.0:
-            base_score += 0.05  # short, likely local road
+        total = base + nat_sum
 
-        # possible curve bonus later
-        # wiggle = ...
-        # base_score += 0.15 * wiggle
+        data["scenic_score"] = total
 
-        # clamp between 0 and 1
-       
-        data["scenic_score"] = base_score
+    # ------ NORMALIZATION (z-score  min/max) ------
+    vals: list[float] = []
+    edges = []
+    for _, _, d in graph.edges(data=True):
+        if "scenic_score" in d:
+            edges.append(d)
+            vals.append(float(d["scenic_score"]))
 
-    # simple standardization (z-score) across all edges' scenic_score
-    vals = []
-    edge_datas = []
-    for u, v, data in graph.edges(data=True):
-        if "scenic_score" in data:
-            edge_datas.append(data)
-            try:
-                vals.append(float(data["scenic_score"]))
-            except Exception:
-                vals.append(0.0)
-    print("\t\t VALS:",vals)
+    if not vals:
+        return
 
-    if vals:
-        mean = sum(vals) / len(vals)
-        # population std
-        var = sum((x - mean) ** 2 for x in vals) / len(vals)
-        std = var ** 0.5
-        print(f"Standardizing scenic_score: mean={mean:.6f}, std={std:.6f}")
-        # compute z-scores
-        if std > 0:
-            zscores = [ (orig - mean) / std for orig in vals ]
-        else:
-            zscores = [0.0 for _ in vals]
+    mean = sum(vals) / len(vals)
+    var = sum((v - mean) ** 2 for v in vals) / len(vals)
+    std = var ** 0.5
 
-        # min-max scale z-scores into [0,1]
-        minz = min(zscores)
-        maxz = max(zscores)
-        if maxz > minz:
-            scaled01 = [ (z - minz) / (maxz - minz) for z in zscores ]
-        else:
-            # all equal -> map to 0.5
-            scaled01 = [0.5 for _ in zscores]
+    if std > 0:
+        zscores = [(v - mean) / std for v in vals]
+    else:
+        zscores = [0.0 for _ in vals]
 
-        print(f"Mapping z-scores to [0,1]: minz={minz:.6f}, maxz={maxz:.6f}")
+    minz = min(zscores)
+    maxz = max(zscores)
 
-        for data, val in zip(edge_datas, scaled01):
-            data["scenic_score"] = float(val)
-            print(float(val))
+    if maxz > minz:
+        scaled = [(z - minz) / (maxz - minz) for z in zscores]
+    else:
+        # all identical -> everything becomes 0.5
+        scaled = [0.5 for _ in zscores]
 
-def add_composite_cost(graph, alpha: float = 0.6) -> None:
-    """blend time and scenic into edge['scenic_cost']"""
+    for d, val in zip(edges, scaled):
+        d["scenic_score"] = float(val)
+
+def add_composite_cost(graph, alpha: float = 0.5) -> None:
+    # First find a rough scale factor for travel times
+    times = [
+        float(data.get("travel_time", 0.0))
+        for _, _, data in graph.edges(data=True)
+    ]
+    if not times:
+        return
+
+    max_time = max(times) or 1.0  
+
     for _, _, data in graph.edges(data=True):
         travel_time = float(data.get("travel_time", 0.0))
         scenic = float(data.get("scenic_score", 0.5))
-        # lower scenic_score should increase cost (less beautiful)
-        data["scenic_cost"] = alpha * travel_time + (1 - alpha) * (1 - scenic)
+
+        # Normalize time to [0,1] by dividing by max_time
+        norm_time = travel_time / max_time  # ~ 0–1
+
+        # Now both terms are ~ 0–1
+        data["scenic_cost"] = alpha * norm_time + (1 - alpha) * (1 - scenic)
+
 
 # graph = load_graph()
 # add_scenic_weights(graph)

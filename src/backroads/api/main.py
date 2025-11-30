@@ -1,12 +1,35 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import Query
-from typing import Optional
-from pydantic import BaseModel
+from typing import Optional, Dict, Any
+from pydantic import BaseModel, Field
 from backroads.core.data.graph import load_graph
-from backroads.core.routing.weighting import add_travel_time, add_scenic_weights, add_composite_cost
+from backroads.core.routing.weighting import (
+    add_travel_time,
+    add_scenic_weights,
+    add_composite_cost,
+    DEFAULT_SCENIC_BY_TYPE,
+    DEFAULT_NATURAL_BY_TYPE,
+)
 from backroads.core.routing.pathfinding import find_route
-import networkx as nx
+from backroads.core.routing.produce_routes import (
+    k_candidate_routes,
+    path_time,
+    path_scenic_avg,
+    rank_routes,
+)
+
+CURRENT_SCENIC_BY_TYPE = dict(DEFAULT_SCENIC_BY_TYPE)
+CURRENT_NATURAL_BY_TYPE = dict(DEFAULT_NATURAL_BY_TYPE)
+
+graph = load_graph()
+add_travel_time(graph)
+add_scenic_weights(
+    graph,
+    scenic_by_type=CURRENT_SCENIC_BY_TYPE,
+    natural_by_type=CURRENT_NATURAL_BY_TYPE,
+)
+add_composite_cost(graph, alpha=0.5)
+
 
 app = FastAPI(
     title="BackRoads Scenic Routing API",
@@ -30,6 +53,26 @@ class RouteRequest(BaseModel):
     extra_minutes: Optional[float] = 0.0
     profile: Optional[str] = "default"
 
+class WeightsRequest(BaseModel):
+    scenic_by_type: Optional[Dict[str, float]] = Field(
+        None,
+        example=DEFAULT_SCENIC_BY_TYPE,
+        description="Override some or all highway scenic weights. Omitted keys use defaults.",
+    )
+    natural_by_type: Optional[Dict[str, float]] = Field(
+        None,
+        example=DEFAULT_NATURAL_BY_TYPE,
+        description="Override some or all natural feature weights. Omitted keys use defaults.",
+    )
+
+class WeightsResponse(BaseModel):
+    scenic_by_type: Dict[str, float] = Field(
+        ..., example=DEFAULT_SCENIC_BY_TYPE
+    )
+    natural_by_type: Dict[str, float] = Field(
+        ..., example=DEFAULT_NATURAL_BY_TYPE
+    )
+
 # Accepts query parameters for now; can switch to POST/JSON if needed
 @app.get("/route")
 def route(
@@ -45,21 +88,65 @@ def route(
         assert len(start_coords) == 2 and len(end_coords) == 2
     except Exception:
         return {"error": "Invalid start or end coordinates. Use 'lat,lon' format."}
+    
 
-    # Load and prepare the graph
-    graph = load_graph()
-    add_travel_time(graph)
-    add_scenic_weights(graph)
-    add_composite_cost(graph, alpha=0.5)  # TODO: tune alpha or use profile
 
-    # Compute route (use 'scenic_cost' if extra_minutes > 0, else 'travel_time')
-    weight = "scenic_cost" if extra_minutes > 0 else "travel_time"
-    result = find_route(tuple(start_coords), tuple(end_coords), graph, weight=weight)
+    global graph, CURRENT_SCENIC_BY_TYPE, CURRENT_NATURAL_BY_TYPE
 
-    # Build GeoJSON LineString for the route
+    if graph is None:
+        raise HTTPException(status_code=500, detail="Routing graph is not initialized")
+
+    origin = tuple(start_coords)      # (lat, lon)
+    destination = tuple(end_coords)   # (lat, lon)
+
+    # 1) Always compute the fastest route first (using travel_time)
+    fastest_result = find_route(origin, destination, graph, weight="travel_time")
+    fastest_nodes = fastest_result["nodes"]
+
+    # compute its time
+    fastest_time = 0.0
+    for u, v in zip(fastest_nodes, fastest_nodes[1:]):
+        data = graph.get_edge_data(u, v, default={})
+        if isinstance(data, dict) and 0 in data:
+            data = data[0]
+        fastest_time += float(data.get("travel_time", 0.0))
+
+    # If no extra time is allowed, just return this fastest route
+    if extra_minutes <= 0:
+        chosen_nodes = fastest_nodes
+        chosen_cost = fastest_result["cost"]
+        chosen_weight = "travel_time"
+    else:
+        # 2) Use k-candidate + ranking logic, constrained by extra_minutes
+        routes = k_candidate_routes(graph, origin, destination, weight="scenic_cost", k=10)
+
+        if not routes:
+            # fallback to fastest if something weird happens
+            chosen_nodes = fastest_nodes
+            chosen_cost = fastest_result["cost"]
+            chosen_weight = "travel_time"
+        else:
+    
+            allowed_time = fastest_time + extra_minutes * 60.0
+            time_budget_factor = allowed_time / fastest_time
+
+            ranked = rank_routes(graph, routes, time_budget_factor=time_budget_factor)
+
+            if ranked:
+                top_path, scenic_avg, time_seconds = ranked[0]
+                chosen_nodes = top_path
+                chosen_cost = time_seconds 
+                chosen_weight = "scenic_cost"
+            else:
+                # If no candidate route fits within the budget, fallback to fastest
+                chosen_nodes = fastest_nodes
+                chosen_cost = fastest_result["cost"]
+                chosen_weight = "travel_time"
+
+    # 3) Build GeoJSON etc. from chosen_nodes
     coords = [
         [graph.nodes[n]["x"], graph.nodes[n]["y"]]
-        for n in result["nodes"]
+        for n in chosen_nodes
     ]
     geojson = {
         "type": "Feature",
@@ -68,34 +155,30 @@ def route(
             "coordinates": coords
         },
         "properties": {
-            "cost": result["cost"],
-            "weight": weight
+            "cost": chosen_cost,
+            "weight": chosen_weight
         }
     }
 
-    # Scenic breakdown: sum scenic_score and travel_time for each edge
+    # Scenic & time breakdown for the chosen route
     scenic_sum = 0.0
     time_sum = 0.0
-    for u, v in zip(result["nodes"], result["nodes"][1:]):
+    for u, v in zip(chosen_nodes, chosen_nodes[1:]):
         data = graph.get_edge_data(u, v, default={})
-        # If multiple edges, pick the first
         if isinstance(data, dict) and 0 in data:
             data = data[0]
         scenic_sum += float(data.get("scenic_score", 0.0))
         time_sum += float(data.get("travel_time", 0.0))
 
-    # Get street names for the route
+    # street_breakdown: reuse your existing code, but use chosen_nodes instead of result["nodes"]
     from backroads.core.utils.streets import get_street_distances_from_path
-    street_segments = get_street_distances_from_path(graph, result["nodes"])
-
-    # Map cardinal direction to symbol
+    street_segments = get_street_distances_from_path(graph, chosen_nodes)
     direction_symbols = {
         'N': '↑', 'S': '↓', 'E': '→', 'W': '←',
         'NE': '↗', 'NW': '↖', 'SE': '↘', 'SW': '↙'
     }
     street_breakdown = []
-    for seg in street_segments:
-        name, miles, direction = seg
+    for name, miles, direction in street_segments:
         symbol = direction_symbols.get(direction, '')
         street_breakdown.append({
             "direction": direction,
@@ -114,5 +197,42 @@ def route(
         "start": start_coords,
         "end": end_coords,
         "extra_minutes": extra_minutes,
-        "profile": profile
+        "profile": profile,
+        "weights_used": {
+            "scenic_by_type": CURRENT_SCENIC_BY_TYPE,
+            "natural_by_type": CURRENT_NATURAL_BY_TYPE,
+        },
+    }
+
+@app.post("/weights")
+def apply_weights(payload: WeightsRequest):
+    global graph, CURRENT_SCENIC_BY_TYPE, CURRENT_NATURAL_BY_TYPE
+
+    # Start from defaults
+    scenic = dict(DEFAULT_SCENIC_BY_TYPE)
+    natural = dict(DEFAULT_NATURAL_BY_TYPE)
+
+    # Apply user overrides (if provided)
+    if payload.scenic_by_type:
+        scenic.update(payload.scenic_by_type)
+
+    if payload.natural_by_type:
+        natural.update(payload.natural_by_type)
+
+    # Update the module-level “current” mappings
+    CURRENT_SCENIC_BY_TYPE = scenic
+    CURRENT_NATURAL_BY_TYPE = natural
+
+    # Recompute weights on the existing graph
+    add_travel_time(graph)
+    add_scenic_weights(
+        graph,
+        scenic_by_type=scenic,
+        natural_by_type=natural,
+    )
+    add_composite_cost(graph, alpha=0.5)
+
+    return {
+        "scenic_by_type": scenic,
+        "natural_by_type": natural,
     }

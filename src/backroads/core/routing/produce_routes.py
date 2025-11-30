@@ -7,7 +7,6 @@ from backroads.core.data.graph import load_graph
 from backroads.core.routing.weighting import add_travel_time, add_scenic_weights, add_composite_cost
 from backroads.core.routing.pathfinding import find_route, _nearest_node, _haversine_distance
 from backroads.core.utils.streets import print_route_street_names
-from backroads.core.utils.visualize_route import visualize_route
 
 '''
 Produce Routes: 
@@ -125,12 +124,12 @@ def find_and_show_ranked_routes(origin, destination, k=5, time_budget_factor=1.5
         print(f"\nTOP ROUTE - Scenic: {scenic_avg:.3f} | Time: {time_seconds/60:.1f} min")
         print_route_street_names(graph, top_path)
 
-        visualize_route(
-            graph, 
-            top_path, 
-            save_path="outputs/top_route.png",  
-            show=True
-        )
+        # visualize_route(
+        #     graph, 
+        #     top_path, 
+        #     save_path="outputs/top_route.png",  
+        #     show=True
+        # )
     else:
         print("No routes found within time budget!")
     

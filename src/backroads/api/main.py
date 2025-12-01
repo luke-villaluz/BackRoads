@@ -30,6 +30,34 @@ add_scenic_weights(
 )
 add_composite_cost(graph, alpha=0.5)
 
+node_lats = [data["y"] for _, data in graph.nodes(data=True)]
+node_lons = [data["x"] for _, data in graph.nodes(data=True)]
+
+GRAPH_BOUNDS = {
+    "min_lat": min(node_lats),
+    "max_lat": max(node_lats),
+    "min_lon": min(node_lons),
+    "max_lon": max(node_lons),
+}
+
+
+def validate_coord_in_graph(lat: float, lon: float, label: str = "coordinate") -> None:
+    """
+    Raise HTTPException if (lat, lon) is outside the graph's bounding box.
+    """
+    if not (
+        GRAPH_BOUNDS["min_lat"] <= lat <= GRAPH_BOUNDS["max_lat"]
+        and GRAPH_BOUNDS["min_lon"] <= lon <= GRAPH_BOUNDS["max_lon"]
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{label} ({lat:.6f}, {lon:.6f}) is outside the supported routing area. "
+                "This API currently only supports routes within the graph's coverage "
+                "(San Luis Obispo County)."
+            ),
+        )
+
 
 app = FastAPI(
     title="BackRoads Scenic Routing API",
@@ -76,8 +104,8 @@ class WeightsResponse(BaseModel):
 # Accepts query parameters for now; can switch to POST/JSON if needed
 @app.get("/route")
 def route(
-    start: str = Query(..., description="Origin as 'lat,lon'"),
-    end: str = Query(..., description="Destination as 'lat,lon'"),
+    start: str = Query(..., description="Origin as 'lat,lon', currently supporting SLO county"),
+    end: str = Query(..., description="Destination as 'lat,lon', currently supporting SLO county"),
     extra_minutes: float = Query(0.0, description="Extra minutes allowed for scenic detour"),
     profile: str = Query("default", description="Scenic profile name")
 ):
@@ -98,6 +126,10 @@ def route(
 
     origin = tuple(start_coords)      # (lat, lon)
     destination = tuple(end_coords)   # (lat, lon)
+
+    validate_coord_in_graph(origin[0], origin[1], label="Origin")
+    validate_coord_in_graph(destination[0], destination[1], label="Destination")
+
 
     # 1) Always compute the fastest route first (using travel_time)
     fastest_result = find_route(origin, destination, graph, weight="travel_time")

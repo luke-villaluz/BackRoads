@@ -139,14 +139,14 @@ def load_graph(annotate: bool = True, place_name: str = "San Luis Obispo County,
             center_lat = ix * cell_deg
             center_lon = iy * cell_deg
             # fetch once per cell
-            print(f"[cell {cell_index}/{len(cells)}] cell_key={key} nodes_in_cell={len(node_list)} center=({center_lat:.6f},{center_lon:.6f})")
+            #print(f"[cell {cell_index}/{len(cells)}] cell_key={key} nodes_in_cell={len(node_list)} center=({center_lat:.6f},{center_lon:.6f})")
             try:
                 LOGGER.info("fetching features for cell %d/%d at center=(%f,%f)", cell_index, len(cells), center_lat, center_lon)
                 gdf = _fetch_natural_features_from_point((center_lat, center_lon), dist_m)
-                print(f"[cell {cell_index}] fetched features: rows=" + str(len(gdf) if gdf is not None else 0))
+                #print(f"[cell {cell_index}] fetched features: rows=" + str(len(gdf) if gdf is not None else 0))
             except Exception as exc:
                 LOGGER.warning("cell fetch failed for key %s: %s", key, exc)
-                print(f"[cell {cell_index}] fetch failed: {exc}")
+                #print(f"[cell {cell_index}] fetch failed: {exc}")
                 gdf = None
 
             # extract natural type values from gdf
@@ -166,7 +166,8 @@ def load_graph(annotate: bool = True, place_name: str = "San Luis Obispo County,
 
             for nid, lat, lon in node_list:
                 natural_by_node[nid] = types.copy() if types else []
-            print(f"[cell {cell_index}] assigned types to {len(node_list)} nodes (types_count={len(types)})")
+    
+            #print(f"[cell {cell_index}] assigned types to {len(node_list)} nodes (types_count={len(types)})")
 
         # Write attributes back into graph nodes
         annotated_count = 0
@@ -177,7 +178,8 @@ def load_graph(annotate: bool = True, place_name: str = "San Luis Obispo County,
                 annotated_count += 1
             data["near_natural"] = str(near)
             data["natural_types"] = ",".join(sorted(set(vals))) if vals else ""
-
+        
+        print("Finished Loading Graph....")
         LOGGER.info("Annotated %d nodes with nearby natural features", annotated_count)
 
     except Exception as exc:

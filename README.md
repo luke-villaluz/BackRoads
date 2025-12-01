@@ -1,33 +1,55 @@
 # BackRoads
+The Backroads API is a Python routing service that recommends scenic or alternative routes given the origin and destination coordinates using data from OpenStreetMaps. The system focuses on identifying routes that are more scenic than routes provided by popular GPS services. The goal is to provide users with routes they would not typically take, allowing them to explore the less-traveled roads of San Luis Obispo County.
 
-Lightweight, fully local scenic-route planner for San Luis Obispo County. We cache OpenStreetMap drive networks, compute fastest routes with NetworkX, and will layer in scenic scoring next.
 
 ## Prerequisites
 - Python 3.11+
 - Git, `pip`, and the ability to create virtual environments (`python -m venv` or `virtualenv`)
 - No external services; everything runs offline after the first graph download
 
-## First-Time Setup
-1. **Clone & enter the repo**
-   ```bash
-   git clone <your-fork-or-upstream-url>
-   cd BackRoads
-Create & activate a virtual environment
+## Project Setup 
+1. Clone the repository
+2. Install the dependencies:
 
-bash
-Copy code
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-Install dependencies
+   `pip install -r requirements.txt`
 
-bash
-Copy code
-pip install -r requirements.txt
-Configure environment variables
+3. Create virtual environment
 
-bash
-Copy code
-cp .env.example .env
+   `python3 -m venv venv`
+4. Activate environment
+
+   Mac: `source venv/bin/activate`
+
+   Windows: `venv\Scripts\activate`
+5. Set up env file
+
+## Running the API 
+1. Run API Server at root
+      ` PYTHONPATH=src uvicorn src.backroads.api.main:app --reload`
+2. Access the server locally at
+      http://127.0.0.1:8000/
+
+## Project Structure 
+
+## API EndPoints 
+
+## About The Data
+The graph of San Luis Obispo was loaded from OpenStreetMaps (OMSnx) in October 2025. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   
 # adjust paths if you want the graph/config/output directories elsewhere
 src/backroads/config.py uses .env to resolve:
 
@@ -73,43 +95,3 @@ from backroads.core.graph_io import load_graph
 graph = load_graph()
 print(f"Graph ready: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges")
 PY
-
-# 2. Compute a fastest route between two San Luis Obispo coordinates
-python - <<'PY';
-from backroads.core.routing import find_fastest_route;
-origin = (35.2828, -120.6596);        # Replace with your origin (lat, lon)
-destination = (35.1810, -120.7340);  # Replace with your destination (lat, lon)
-result = find_fastest_route(origin, destination);
-print("Node sequence:", result["nodes"]);
-print("Travel time (minutes):", result["travel_time_seconds"] / 60);
-PY
-Repo Layout
-configs/ — YAML scenic profiles (empty starter directory)
-
-data_cache/ — cached OSM graph (GRAPH_PATH lives here by default)
-
-outputs/ — placeholder for route GeoJSON or debug artifacts
-
-src/backroads/config.py — central path/env loader
-
-src/backroads/core/graph_io.py — download/load the SLO drive graph
-
-src/backroads/core/routing.py — travel-time weighting and shortest-path logic
-
-tests/ — reserved for future pytest suites (none yet)
-
-Day-to-Day Workflow
-Activate .venv, export any overrides, and use the quick commands above to fetch the graph or probe routes.
-
-When hacking on new features, prefer small, testable steps—mirror PROJECT_CONTEXT.md guidelines.
-
-Run pytest (once tests exist) before committing; currently there are no tests, so consider adding targeted unit tests for new logic.
-
-Next Milestones (per hand-off notes)
-Week 4 — Extract scenic features from the graph and wire up YAML weight profiles.
-
-Week 5 — Rank candidate routes within a user-defined time budget.
-
-Week 6 — Layer on a thin FastAPI API (health check + route endpoint).
-
-With this setup, any teammate can install deps, cache the map, and start iterating on routing or upcoming scenic features immediately.

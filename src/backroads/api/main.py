@@ -29,6 +29,8 @@ add_scenic_weights(
     natural_by_type=CURRENT_NATURAL_BY_TYPE,
 )
 add_composite_cost(graph, alpha=0.5)
+for u, v, data in list(graph.edges(data=True))[:5]:
+    print(f"{u} → {v}: {data}")
 
 node_lats = [data["y"] for _, data in graph.nodes(data=True)]
 node_lons = [data["x"] for _, data in graph.nodes(data=True)]

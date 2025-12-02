@@ -11,7 +11,11 @@ from backroads.core.routing.weighting import (
     DEFAULT_NATURAL_BY_TYPE,
 )
 from backroads.core.routing.produce_routes import compute_route
+from backroads.core.routing.directions import get_directions
 from backroads.core.utils.geo import validate_coord_in_bounds, parse_coord
+from uuid import uuid4
+
+ROUTE_CACHE = {}
 
 CURRENT_SCENIC_BY_TYPE = dict(DEFAULT_SCENIC_BY_TYPE)
 CURRENT_NATURAL_BY_TYPE = dict(DEFAULT_NATURAL_BY_TYPE)
@@ -68,13 +72,46 @@ class WeightsResponse(BaseModel):
     )
 
 # Accepts query parameters for now; can switch to POST/JSON if needed
+# @app.post(
+#     "/route",
+#     tags=["Routing"],
+#     summary="Compute a scenic or fastest route",
+#     operation_id="compute_route"
+# )
+# def route(req: RouteRequest):
+#     global graph, CURRENT_SCENIC_BY_TYPE, CURRENT_NATURAL_BY_TYPE
+
+#     if graph is None:
+#         raise HTTPException(status_code=500, detail="Routing graph is not initialized")
+
+#     origin = parse_coord(req.start)
+#     destination = parse_coord(req.end)
+
+#     try:
+#         validate_coord_in_bounds(origin[0], origin[1], "Origin")
+#         validate_coord_in_bounds(destination[0], destination[1], "Destination")
+#     except ValueError as e:
+#         raise HTTPException(status_code=400, detail=str(e))
+   
+#     return compute_route(
+#         graph,
+#         origin,
+#         destination,
+#         req.extra_minutes,
+#         CURRENT_SCENIC_BY_TYPE,
+#         CURRENT_NATURAL_BY_TYPE,
+#         req.profile)
+"""
+POST Compute Route 
+Response: GeoJSON route of coordinates 
+"""
 @app.post(
-    "/route",
+    "/route/compute",
     tags=["Routing"],
-    summary="Compute a scenic or fastest route",
+    summary="Compute a scenic or fastest route, returns GeoJSON Route",
     operation_id="compute_route"
 )
-def route(req: RouteRequest):
+def compute_route_endpoint(req: RouteRequest):
     global graph, CURRENT_SCENIC_BY_TYPE, CURRENT_NATURAL_BY_TYPE
 
     if graph is None:
@@ -88,16 +125,55 @@ def route(req: RouteRequest):
         validate_coord_in_bounds(destination[0], destination[1], "Destination")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-   
-    return compute_route(
+    
+    result = compute_route(
         graph,
         origin,
         destination,
         req.extra_minutes,
         CURRENT_SCENIC_BY_TYPE,
         CURRENT_NATURAL_BY_TYPE,
-        req.profile)
+        req.profile
+    )
 
+    route_id = str(uuid4())
+    ROUTE_CACHE[route_id] = result
+
+    return { "route_id": route_id, **result }
+
+"""
+GET Directions 
+Response: Street directions
+"""
+@app.get(
+        "/route/{route_id}/directions",
+        tags=["Routing"],
+        summary="Get the street directions to the route",
+        operation_id="route_directions"
+        )
+def route_directions(route_id: str):
+    route = ROUTE_CACHE.get(route_id)
+    if not route:
+        raise HTTPException(404, "Route not found")
+
+    street_data = get_directions(graph, route["nodes"])
+
+    return {"route_id": route_id, "directions": street_data}
+
+# @app.get("/route/{route_id}/breakdown", summary="Get the scenic breakdown of the route")
+# def scenic_breakdown(route_id: str):
+#     route = ROUTE_CACHE.get(route_id)
+#     if not route:
+#         raise HTTPException(404, "Route not found")
+
+#     stats = compute_scenic_breakdown(
+#         graph,
+#         route["nodes"],
+#         CURRENT_SCENIC_BY_TYPE,
+#         CURRENT_NATURAL_BY_TYPE
+#     )
+
+#     return {"route_id": route_id, **stats}
 
 @app.post("/weights")
 def apply_weights(payload: WeightsRequest):

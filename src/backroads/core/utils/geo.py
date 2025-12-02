@@ -37,11 +37,14 @@ def validate_coord_in_bounds(lat: float, lon: float, label: str = "coordinate") 
         )
 
 def parse_coord(coord):
+    if not isinstance(coord, (list, tuple)) or len(coord) != 2:
+        raise ValueError("Coordinate must be a list [lat, lon]")
     try:
-        lat, lon = map(float, coord.split(","))
-        return (lat, lon)
+        lat = float(coord[0])
+        lon = float(coord[1])
+        return lat, lon
     except Exception:
-        raise ValueError("Invalid coordinate format")
+        raise ValueError("Coordinate must contain numeric lat/lon")
 
 
 def calculate_bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

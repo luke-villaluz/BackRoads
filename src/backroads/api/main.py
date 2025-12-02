@@ -68,20 +68,20 @@ class WeightsResponse(BaseModel):
     )
 
 # Accepts query parameters for now; can switch to POST/JSON if needed
-@app.get("/route")
-def route(
-    start: str = Query(..., description="Origin as 'lat,lon', currently supporting SLO county"),
-    end: str = Query(..., description="Destination as 'lat,lon', currently supporting SLO county"),
-    extra_minutes: float = Query(0.0, description="Extra minutes allowed for scenic detour"),
-    profile: str = Query("default", description="Scenic profile name")
-):
+@app.post(
+    "/route",
+    tags=["Routing"],
+    summary="Compute a scenic or fastest route",
+    operation_id="compute_route"
+)
+def route(req: RouteRequest):
     global graph, CURRENT_SCENIC_BY_TYPE, CURRENT_NATURAL_BY_TYPE
 
     if graph is None:
         raise HTTPException(status_code=500, detail="Routing graph is not initialized")
 
-    origin = parse_coord(start)
-    destination = parse_coord(end)
+    origin = parse_coord(req.start)
+    destination = parse_coord(req.end)
 
     try:
         validate_coord_in_bounds(origin[0], origin[1], "Origin")
@@ -93,10 +93,10 @@ def route(
         graph,
         origin,
         destination,
-        extra_minutes,
+        req.extra_minutes,
         CURRENT_SCENIC_BY_TYPE,
         CURRENT_NATURAL_BY_TYPE,
-        profile)
+        req.profile)
 
 
 @app.post("/weights")

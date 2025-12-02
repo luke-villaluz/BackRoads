@@ -45,10 +45,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class Coordinate(BaseModel):
+    lat: float = Field(..., description="Latitude")
+    lon: float = Field(..., description="Longitude")
 
 class RouteRequest(BaseModel):
-    start: list[float]  # [lat, lon]
-    end: list[float]    # [lat, lon]
+    start: Coordinate 
+    end: Coordinate   
     extra_minutes: Optional[float] = 0.0
     profile: Optional[str] = "default"
 

@@ -37,14 +37,18 @@ def validate_coord_in_bounds(lat: float, lon: float, label: str = "coordinate") 
         )
 
 def parse_coord(coord):
-    if not isinstance(coord, (list, tuple)) or len(coord) != 2:
-        raise ValueError("Coordinate must be a list [lat, lon]")
-    try:
-        lat = float(coord[0])
-        lon = float(coord[1])
-        return lat, lon
-    except Exception:
-        raise ValueError("Coordinate must contain numeric lat/lon")
+    if hasattr(coord, "lat") and hasattr(coord, "lon"):
+        return coord.lat, coord.lon
+
+    if isinstance(coord, dict) and "lat" in coord and "lon" in coord:
+        return coord["lat"], coord["lon"]
+
+    # Fallback to the old list behavior
+    if isinstance(coord, (list, tuple)) and len(coord) == 2:
+        return coord[0], coord[1]
+
+    raise ValueError("Coordinate must be a list [lat, lon] or an object with lat/lon")
+
 
 
 def calculate_bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

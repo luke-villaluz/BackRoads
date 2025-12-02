@@ -4,6 +4,8 @@ import json
 
 import osmnx as ox
 from backroads.config import GRAPH_PATH, ensure_directories
+from backroads.core.utils.geo import set_graph_bounds
+
 
 try:
     import geopandas as gpd
@@ -93,6 +95,23 @@ def load_graph(annotate: bool = True, place_name: str = "San Luis Obispo County,
             LOGGER.info("saved graph to %s", GRAPH_PATH)
         except Exception:
             LOGGER.warning("Failed to save graph to %s", GRAPH_PATH)
+
+    node_lats = [data["y"] for _, data in graph.nodes(data=True)]
+    node_lons = [data["x"] for _, data in graph.nodes(data=True)]
+
+    set_graph_bounds(
+        min(node_lats),
+        max(node_lats),
+        min(node_lons),
+        max(node_lons)
+    )
+    LOGGER.info(
+        "Graph bounds initialized: lat[%f, %f], lon[%f, %f]",
+        min(node_lats),
+        max(node_lats),
+        min(node_lons),
+        max(node_lons),
+    )
 
     if not annotate:
         return graph

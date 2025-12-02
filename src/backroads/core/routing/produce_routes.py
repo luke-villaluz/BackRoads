@@ -15,12 +15,14 @@ Produce Routes:
     - Ranks k routes
     - Returns top routes with directions and street names of the top route 
 '''
-def compute_route(graph, origin, destination, extra_minutes, scenic_by_type, natural_by_type, profile="default"):
+def compute_route(graph, origin, destination, extra_minutes,
+                  scenic_by_type, natural_by_type, profile="default"):
+
     # 1) Always compute the fastest route first (using travel_time)
     fastest_result = find_route(origin, destination, graph, weight="travel_time")
     fastest_nodes = fastest_result["nodes"]
 
-    # compute its time
+    # compute fastest route travel time
     fastest_time = 0.0
     for u, v in zip(fastest_nodes, fastest_nodes[1:]):
         data = graph.get_edge_data(u, v, default={})
@@ -34,21 +36,24 @@ def compute_route(graph, origin, destination, extra_minutes, scenic_by_type, nat
         chosen_cost = fastest_result["cost"]
         chosen_weight = "travel_time"
     else:
-        # 2) Use k-candidate + ranking logic, constrained by extra_minutes
+        # 2) Use k-candidate + ranking logic
         routes = k_candidate_routes(graph, origin, destination,
                                     weight="scenic_cost", k=10)
 
         if not routes:
-            # fallback to fastest if something weird happens
             chosen_nodes = fastest_nodes
             chosen_cost = fastest_result["cost"]
             chosen_weight = "travel_time"
+
         else:
             allowed_time = fastest_time + extra_minutes * 60.0
             time_budget_factor = allowed_time / fastest_time
 
-            ranked = rank_routes(graph, routes,
-                                 time_budget_factor=time_budget_factor)
+            ranked = rank_routes(
+                graph,
+                routes,
+                time_budget_factor=time_budget_factor
+            )
 
             if ranked:
                 top_path, scenic_avg, time_seconds = ranked[0]
@@ -56,16 +61,18 @@ def compute_route(graph, origin, destination, extra_minutes, scenic_by_type, nat
                 chosen_cost = time_seconds
                 chosen_weight = "scenic_cost"
             else:
-                # If no candidate route fits within the budget, fallback to fastest
                 chosen_nodes = fastest_nodes
                 chosen_cost = fastest_result["cost"]
                 chosen_weight = "travel_time"
 
-    # 3) Build GeoJSON etc. from chosen_nodes
     coords = [
         [graph.nodes[n]["x"], graph.nodes[n]["y"]]
         for n in chosen_nodes
     ]
+
+    # ------------------------------------------
+    # REMOVE LATER: full GeoJSON (keep only coords)
+    # ------------------------------------------
     geojson = {
         "type": "Feature",
         "geometry": {
@@ -78,48 +85,45 @@ def compute_route(graph, origin, destination, extra_minutes, scenic_by_type, nat
         }
     }
 
-    # Scenic & time breakdown for the chosen route
-    scenic_sum = 0.0
-    time_sum = 0.0
-    for u, v in zip(chosen_nodes, chosen_nodes[1:]):
-        data = graph.get_edge_data(u, v, default={})
-        if isinstance(data, dict) and 0 in data:
-            data = data[0]
-        scenic_sum += float(data.get("scenic_score", 0.0))
-        time_sum += float(data.get("travel_time", 0.0))
+    # ------------------------------------------
+    # REMOVE LATER: scenic/time breakdown
+    # ------------------------------------------
+    # scenic_sum = 0.0
+    # time_sum = 0.0
+    # for u, v in zip(chosen_nodes, chosen_nodes[1:]):
+    #     data = graph.get_edge_data(u, v, default={})
+    #     if isinstance(data, dict) and 0 in data:
+    #         data = data[0]
+    #     scenic_sum += float(data.get("scenic_score", 0.0))
+    #     time_sum += float(data.get("travel_time", 0.0))
 
-    # street_breakdown (same logic)
-    street_segments = get_street_distances_from_path(graph, chosen_nodes)
-    direction_symbols = {
-        'N': '↑', 'S': '↓', 'E': '→', 'W': '←',
-        'NE': '↗', 'NW': '↖', 'SE': '↘', 'SW': '↙'
-    }
-    street_breakdown = []
-    for name, miles, direction in street_segments:
-        symbol = direction_symbols.get(direction, '')
-        street_breakdown.append({
-            "direction": direction,
-            "direction_symbol": symbol,
-            "street": name,
-            "miles": round(miles, 2)
-        })
-
+  
+    # ------------------------------------------
+    # RETURN ONLY BASE ROUTE INFO
+    # ------------------------------------------
     return {
         "geojson": geojson,
-        "scenic_breakdown": {
-            "total_scenic_score": scenic_sum,
-            "total_travel_time_seconds": time_sum
-        },
-        "street_breakdown": street_breakdown,
-        "start": list(origin),
-        "end": list(destination),
-        "extra_minutes": extra_minutes,
-        "profile": profile,
-        "weights_used": {
-            "scenic_by_type": scenic_by_type,
-            "natural_by_type": natural_by_type,
-        },
+
+        # "scenic_breakdown": {
+        #     "total_scenic_score": scenic_sum,
+        #     "total_travel_time_seconds": time_sum
+        # },
+
+
+        # "start": list(origin),
+        # "end": list(destination),
+
+        # "extra_minutes": extra_minutes,
+        # "profile": profile,
+        "nodes": chosen_nodes,
+        "coordinates": coords,
+
+        # "weights_used": {
+        #     "scenic_by_type": scenic_by_type,
+        #     "natural_by_type": natural_by_type,
+        # },
     }
+
 # NOT kth shortest paths algo, this is literally returning more than 1 (k) routes
 def k_candidate_routes(
     graph: nx.MultiDiGraph,

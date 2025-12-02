@@ -12,6 +12,7 @@ from backroads.core.routing.weighting import (
 )
 from backroads.core.routing.produce_routes import compute_route
 from backroads.core.routing.directions import get_directions
+from backroads.core.routing.breakdown import get_scenic_breakdown
 from backroads.core.utils.geo import validate_coord_in_bounds, parse_coord
 from uuid import uuid4
 
@@ -160,22 +161,37 @@ def route_directions(route_id: str):
 
     return {"route_id": route_id, "directions": street_data}
 
-# @app.get("/route/{route_id}/breakdown", summary="Get the scenic breakdown of the route")
-# def scenic_breakdown(route_id: str):
-#     route = ROUTE_CACHE.get(route_id)
-#     if not route:
-#         raise HTTPException(404, "Route not found")
+"""
+GET Scenic Breakdown 
+Response: scenic score and travel time 
+"""
+@app.get(
+        "/route/{route_id}/breakdown",
+        tags=["Routing"],
+        summary="Get thebreakdown of the route: including scenic score, weights, and travel time in seconds ",
+        operation_id="scenic_breakdown"
+        )
+def scenic_breakdown(route_id: str):
+    route = ROUTE_CACHE.get(route_id)
+    if not route:
+        raise HTTPException(404, "Route not found")
 
-#     stats = compute_scenic_breakdown(
-#         graph,
-#         route["nodes"],
-#         CURRENT_SCENIC_BY_TYPE,
-#         CURRENT_NATURAL_BY_TYPE
-#     )
+    stats = get_scenic_breakdown(
+        graph,
+        route["nodes"]
+    )
 
-#     return {"route_id": route_id, **stats}
+    return {
+        "route_id": route_id,
+        "breakdown": stats,
+        "weights_used": {
+            "scenic_by_type": CURRENT_SCENIC_BY_TYPE,
+            "natural_by_type": CURRENT_NATURAL_BY_TYPE
+        }
+    }
 
-@app.post("/weights")
+
+@app.post("/weights", tags=["Customization"])
 def apply_weights(payload: WeightsRequest):
     global graph, CURRENT_SCENIC_BY_TYPE, CURRENT_NATURAL_BY_TYPE
 

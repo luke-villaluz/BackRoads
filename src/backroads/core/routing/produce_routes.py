@@ -85,43 +85,14 @@ def compute_route(graph, origin, destination, extra_minutes,
         }
     }
 
-    # ------------------------------------------
-    # REMOVE LATER: scenic/time breakdown
-    # ------------------------------------------
-    # scenic_sum = 0.0
-    # time_sum = 0.0
-    # for u, v in zip(chosen_nodes, chosen_nodes[1:]):
-    #     data = graph.get_edge_data(u, v, default={})
-    #     if isinstance(data, dict) and 0 in data:
-    #         data = data[0]
-    #     scenic_sum += float(data.get("scenic_score", 0.0))
-    #     time_sum += float(data.get("travel_time", 0.0))
-
-  
-    # ------------------------------------------
-    # RETURN ONLY BASE ROUTE INFO
-    # ------------------------------------------
     return {
         "geojson": geojson,
 
-        # "scenic_breakdown": {
-        #     "total_scenic_score": scenic_sum,
-        #     "total_travel_time_seconds": time_sum
-        # },
-
-
-        # "start": list(origin),
-        # "end": list(destination),
-
         # "extra_minutes": extra_minutes,
         # "profile": profile,
+        
         "nodes": chosen_nodes,
         "coordinates": coords,
-
-        # "weights_used": {
-        #     "scenic_by_type": scenic_by_type,
-        #     "natural_by_type": natural_by_type,
-        # },
     }
 
 # NOT kth shortest paths algo, this is literally returning more than 1 (k) routes

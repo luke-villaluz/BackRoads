@@ -30,8 +30,16 @@ The Backroads API is a Python routing service that recommends scenic or alternat
       http://127.0.0.1:8000/docs
 
 ## Project Structure 
+### API
+### Core logic
+* Data
+* Routing
+* Utils
 
 ## API EndPoints 
+### /route/compute
+### /route/{route_id}/directions
+### route/{route_id}/breakdown
 
 ## About The Data
 The graph of San Luis Obispo was loaded from OpenStreetMaps (OMSnx) in October 2025. Disclaimer: OpenStreetMaps is open data that anyone can contribute to. The information may be out of date or inaccurate as a result. 

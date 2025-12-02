@@ -5,6 +5,44 @@ This module provides geographic helpers like bearing and direction calculation.
 
 import math
 
+GRAPH_BOUNDS = {
+    "min_lat": None,
+    "max_lat": None,
+    "min_lon": None,
+    "max_lon": None,
+}
+
+def set_graph_bounds(min_lat: float, max_lat: float, min_lon: float, max_lon: float):
+    GRAPH_BOUNDS["min_lat"] = min_lat
+    GRAPH_BOUNDS["max_lat"] = max_lat
+    GRAPH_BOUNDS["min_lon"] = min_lon
+    GRAPH_BOUNDS["max_lon"] = max_lon
+
+def validate_coord_in_bounds(lat: float, lon: float, label: str = "coordinate") -> None:
+    """
+    Validate that (lat, lon) lies inside the graph's bounding box.
+    Raises ValueError if out of bounds.
+    """
+    if GRAPH_BOUNDS["min_lat"] is None:
+        raise RuntimeError("GRAPH_BOUNDS not initialized. Call set_graph_bounds().")
+
+    if not (
+        GRAPH_BOUNDS["min_lat"] <= lat <= GRAPH_BOUNDS["max_lat"]
+        and GRAPH_BOUNDS["min_lon"] <= lon <= GRAPH_BOUNDS["max_lon"]
+    ):
+        raise ValueError(
+            f"{label} ({lat:.6f}, {lon:.6f}) is outside the supported routing area. "
+            f"Bounds: lat[{GRAPH_BOUNDS['min_lat']}, {GRAPH_BOUNDS['max_lat']}], "
+            f"lon[{GRAPH_BOUNDS['min_lon']}, {GRAPH_BOUNDS['max_lon']}]"
+        )
+
+def parse_coord(coord):
+    try:
+        lat, lon = map(float, coord.split(","))
+        return (lat, lon)
+    except Exception:
+        raise ValueError("Invalid coordinate format")
+
 
 def calculate_bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """

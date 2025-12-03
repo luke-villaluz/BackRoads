@@ -68,28 +68,44 @@ def add_travel_time(graph) -> None:
         # attach travel time to the edge
         data["travel_time"] = travel_time
 
+def _node_naturals(graph, node_id):
+    raw = graph.nodes[node_id].get("natural_types", [])
+    if not raw:
+        return []
 
-def add_scenic_weights(graph, scenic_by_type: Optional[Dict[str, float]] = None, natural_by_type: Optional[Dict[str, Any]] = None) -> None:
-    """compute edge['scenic_score'] in [0,1] based on road type (and optional bonuses based off short (local) roads).
+    if isinstance(raw, str):
+        # split "beach,cliff,coastline" -> ["beach", "cliff", "coastline"]
+        return [s.strip() for s in raw.split(",") if s.strip()]
 
-    Accepts optional overrides for scenic_by_type and natural_by_type. If not provided,
-    default mappings are used (kept for backwards compatibility).
+    # assume it is already a list/iterable
+    return list(raw)
+
+
+def add_scenic_weights(
+    graph,
+    scenic_by_type: Optional[Dict[str, float]] = None,
+    natural_by_type: Optional[Dict[str, Any]] = None,
+) -> None:
+    """
+    Compute a raw scenic_score per edge based on:
+      - road type (SCENIC)
+      - natural features at its endpoints (NATURAL)
+
+    scenic_score is NOT normalized here; add_composite_cost will normalize.
     """
 
-    # use module-level defaults unless overrides were provided
     SCENIC = scenic_by_type if scenic_by_type is not None else DEFAULT_SCENIC_BY_TYPE
     NATURAL = natural_by_type if natural_by_type is not None else DEFAULT_NATURAL_BY_TYPE
 
     for u, v, data in graph.edges(data=True):
+
         hwy = data.get("highway")
         if isinstance(hwy, (list, tuple)):
             hwy = hwy[0]
         base = float(SCENIC.get(hwy, 0.5))
 
-    
-        naturals = []
-        naturals += graph.nodes[u].get("natural_types", []) or []
-        naturals += graph.nodes[v].get("natural_types", []) or []
+
+        naturals = _node_naturals(graph, u) + _node_naturals(graph, v)
 
         nat_sum = 0.0
         for nat in naturals:
@@ -97,63 +113,76 @@ def add_scenic_weights(graph, scenic_by_type: Optional[Dict[str, float]] = None,
                 val = NATURAL[nat]
                 if val is not None:
                     nat_sum += float(val)
+        print(naturals, nat_sum)
 
-        total = base + nat_sum
-
+        BOOST = 1.5   # natural dominance factor (tune 1.0–3.0)
+        total = base * (1.0 + nat_sum)**BOOST
         data["scenic_score"] = total
 
-    # ------ NORMALIZATION (z-score  min/max) ------
-    vals: list[float] = []
-    edges = []
-    for _, _, d in graph.edges(data=True):
-        if "scenic_score" in d:
-            edges.append(d)
-            vals.append(float(d["scenic_score"]))
 
-    if not vals:
-        return
+# def add_composite_cost(graph, alpha: float = 0.5) -> None:
+#     """
+#     Compute edge['scenic_cost'] as a composite of normalized travel_time and
+#     normalized scenic_score:
 
-    mean = sum(vals) / len(vals)
-    var = sum((v - mean) ** 2 for v in vals) / len(vals)
-    std = var ** 0.5
+#         scenic_cost = alpha * norm_time + (1 - alpha) * (1 - norm_scenic)
 
-    if std > 0:
-        zscores = [(v - mean) / std for v in vals]
-    else:
-        zscores = [0.0 for _ in vals]
+#     where:
+#         - norm_time   ∈ [0,1], higher = slower
+#         - norm_scenic ∈ [0,1], higher = more scenic
 
-    minz = min(zscores)
-    maxz = max(zscores)
+#     Lower scenic_cost is better for routing.
+#     """
+#     # Collect time and scenic values for normalization
+#     times: list[float] = []
+#     scenics: list[float] = []
 
-    if maxz > minz:
-        scaled = [(z - minz) / (maxz - minz) for z in zscores]
-    else:
-        # all identical -> everything becomes 0.5
-        scaled = [0.5 for _ in zscores]
+#     for _, _, data in graph.edges(data=True):
+#         times.append(float(data.get("travel_time", 0.0)))
+#         scenics.append(float(data.get("scenic_score", 0.0)))
 
-    for d, val in zip(edges, scaled):
-        d["scenic_score"] = float(val)
+#     if not times or not scenics:
+#         return
 
-def add_composite_cost(graph, alpha: float = 0.5) -> None:
-    # First find a rough scale factor for travel times
-    times = [
-        float(data.get("travel_time", 0.0))
-        for _, _, data in graph.edges(data=True)
-    ]
-    if not times:
-        return
+#     max_time = max(times) or 1.0
 
-    max_time = max(times) or 1.0  
+#     scenic_min = min(scenics)
+#     scenic_max = max(scenics)
 
+#     # Avoid division by zero if all scenic_scores are identical
+#     scenic_range = scenic_max - scenic_min if scenic_max > scenic_min else None
+
+#     for _, _, data in graph.edges(data=True):
+#         travel_time = float(data.get("travel_time", 0.0))
+#         scenic = float(data.get("scenic_score", 0.0))
+
+#         # Normalize time to [0,1]
+#         norm_time = travel_time / max_time  # larger = slower
+
+#         # Normalize scenic_score to [0,1] across this graph
+#         if scenic_range is not None:
+#             norm_scenic = (scenic - scenic_min) / scenic_range
+#         else:
+#             norm_scenic = 0.5  # everything same → treat as neutral
+
+#         # Composite cost: smaller is better
+#         data["scenic_cost"] = alpha * norm_time + (1.0 - alpha) * (1.0 - norm_scenic)
+def add_composite_cost(graph) -> None:
+    """
+    Define a purely scenic cost:
+
+        scenic_cost = length / (scenic_score + ε)
+
+    So:
+      - higher scenic_score → smaller scenic_cost
+      - longer edges are still a bit more expensive
+    """
     for _, _, data in graph.edges(data=True):
-        travel_time = float(data.get("travel_time", 0.0))
-        scenic = float(data.get("scenic_score", 0.5))
+        length = float(data.get("length", 0.0))
+        scenic = float(data.get("scenic_score", 0.0))
 
-        # Normalize time to [0,1] by dividing by max_time
-        norm_time = travel_time / max_time  # ~ 0–1
+        data["scenic_cost"] = length / (scenic + 1e-6)
 
-        # Now both terms are ~ 0–1
-        data["scenic_cost"] = alpha * norm_time + (1 - alpha) * (1 - scenic)
 
 
 # graph = load_graph()

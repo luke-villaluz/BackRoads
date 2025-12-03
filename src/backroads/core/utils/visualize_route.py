@@ -29,7 +29,8 @@ def visualize(graph: nx.Graph, route_nodes: list | Path = None, show: bool = Tru
         pos=pos,
         edgelist=route_edges,
         edge_color="red",
-        width=2.5,
+        width=1.0,
+        arrowsize=4,
         ax=ax,
     )
     # zoom into route

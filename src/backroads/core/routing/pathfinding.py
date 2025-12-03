@@ -25,14 +25,21 @@ Algorithm:
     - A* with straight-line (haversine) distance as heuristic
 '''
 
-# default weight is "scenic_cost", but can be any edge attribute
+# default weight is "scenic_score", but can be any edge attribute
 def find_route(origin, destination, graph, weight="scenic_cost"):
-    """Return shortest path between two (lat, lon) points, using A*."""
+    """
+    Return shortest path between two (lat, lon) points, using A*.
+
+    - For weight="travel_time": A* with distance→time heuristic.
+    - For weight="scenic_cost" (or anything else): A* with heuristic=0,
+    """
     origin_node = _nearest_node(graph, origin)
     destination_node = _nearest_node(graph, destination)
-    h = lambda u, v=destination_node, _w=weight: _node_distance_heuristic(graph, u, v, _w)
 
-    # A* path
+    h = lambda u, v=destination_node, _w=weight: _node_distance_heuristic(
+        graph, u, v, _w
+    )
+
     path = nx.astar_path(
         graph,
         source=origin_node,
@@ -41,7 +48,6 @@ def find_route(origin, destination, graph, weight="scenic_cost"):
         weight=weight,
     )
 
-    # A* total path cost
     cost = nx.astar_path_length(
         graph,
         source=origin_node,
@@ -50,20 +56,16 @@ def find_route(origin, destination, graph, weight="scenic_cost"):
         weight=weight,
     )
 
-    return {
-        "nodes": path,
-        "cost": cost,
-    }
+    return {"nodes": path, "cost": cost}
 
 def _node_distance_heuristic(graph, u, v, weight: str) -> float:
     """
     Weight-aware heuristic for A*.
 
-    - For distance/time-like weights, use straight-line distance as a lower bound.
-    - For non-metric weights (like 'scenic_cost'), return 0 so we don't
-      distort the cost space.
+    - For 'travel_time': use straight-line distance converted to a LOWER-BOUND time.
+    - For non-metric weights like 'scenic_cost': return 0 so we don't warp the
+      scenic weights; A* degenerates to Dijkstra (still optimal).
     """
-    # If the weight is not geometric, don't use a distance heuristic
     if weight not in {"travel_time"}:
         return 0.0
 
@@ -75,22 +77,17 @@ def _node_distance_heuristic(graph, u, v, weight: str) -> float:
     if None in (lat1, lon1, lat2, lon2):
         return 0.0
 
-    # meters
     dist_m = _haversine_distance(lat1, lon1, lat2, lon2)
 
-    if weight in {"travel_time", "time"}:
-        max_speed_mps = 35 / 3.6  # ~35 km/h as a conservative upper bound
-        return dist_m / max_speed_mps
-
-    return dist_m
-
+    max_speed_mps = 35 / 3.6  # ~35 km/h, adjust as needed
+    return dist_m / max_speed_mps
 
 def _nearest_node(graph, point):
     lat, lon = point
     try:
         return ox.nearest_nodes(graph, lon, lat)
     except ImportError:
-        # fall back to manual search
+        # Fallback manual search
         closest = None
         best_dist = float("inf")
         for node_id, data in graph.nodes(data=True):
@@ -105,7 +102,7 @@ def _nearest_node(graph, point):
         if closest is None:
             raise ValueError("graph has no other nodes to connect to")
         return closest
-
+    
 def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Return great-circle distance in meters between two lat/lon points."""
     r = 6371000  # mean Earth radius in meters

@@ -146,7 +146,10 @@ def load_graph_endpoint():
             scenic_by_type=CURRENT_SCENIC_BY_TYPE,
             natural_by_type=CURRENT_NATURAL_BY_TYPE,
         )
-        add_composite_cost(graph, alpha=0.5)
+        add_composite_cost(
+            graph
+        )
+        #add_composite_cost(graph, alpha=0.5)
 
         nodes = graph.number_of_nodes()
         edges = graph.number_of_edges()
@@ -280,7 +283,7 @@ def apply_weights(payload: WeightsRequest):
             scenic_by_type=scenic,
             natural_by_type=natural,
         )
-        add_composite_cost(graph, alpha=0.5)
+        add_composite_cost(graph)
     except Exception as e:
         raise HTTPException(
             status_code=500,

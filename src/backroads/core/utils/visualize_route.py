@@ -1,14 +1,16 @@
 import osmnx as ox
 import networkx as nx
-import matplotlib.pyplot as plt
 from pathlib import Path
+import io
+import matplotlib
+matplotlib.use("Agg") 
 
-def visualize_route(graph: nx.Graph, route_nodes: list, save_path: str | Path = None, show: bool = True):
+import matplotlib.pyplot as plt
 
+def visualize(graph: nx.Graph, route_nodes: list | Path = None, show: bool = True):
     if not route_nodes:
         raise ValueError("Route nodes list is empty!")
 
-    # Draw the entire network lightly in gray
     fig, ax = ox.plot_graph(
         graph, 
         node_size=0, 
@@ -16,29 +18,38 @@ def visualize_route(graph: nx.Graph, route_nodes: list, save_path: str | Path = 
         edge_linewidth=0.5, 
         bgcolor="white",
         show=False,
-        close=False
+        close=False,
     )
 
-    # Extract edges along the route
     route_edges = list(zip(route_nodes[:-1], route_nodes[1:]))
-    
-    # Draw the route in red with thicker edges
+    pos = {n: (data["x"], data["y"]) for n, data in graph.nodes(data=True)}
+
     nx.draw_networkx_edges(
         graph,
-        pos={n: (data['x'], data['y']) for n, data in graph.nodes(data=True)},
+        pos=pos,
         edgelist=route_edges,
         edge_color="red",
         width=2.5,
-        ax=ax
+        ax=ax,
     )
-    
-    if save_path:
-        save_path = Path(save_path)
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        print(f"Route visualization saved to {save_path}")
-    
+    # zoom into route
+    route_x = [pos[n][0] for n in route_nodes]
+    route_y = [pos[n][1] for n in route_nodes]
+
+    pad = 0.01  # Adjust if needed
+    xmin, xmax = min(route_x) - pad, max(route_x) + pad
+    ymin, ymax = min(route_y) - pad, max(route_y) + pad
+
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+
     if show:
         plt.show()
-    else:
-        plt.close()
+        plt.close(fig)
+        return None
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf

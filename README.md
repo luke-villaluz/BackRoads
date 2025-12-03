@@ -25,7 +25,7 @@ The Backroads API is a Python routing service that recommends scenic or alternat
 
 ## Running the API 
 1. Run API Server at root
-      ` PYTHONPATH=src uvicorn src.backroads.api.main:app --reload`
+      `  python -m uvicorn --app-dir src backroads.api.main:app --reload`
 2. Access the server locally at
       http://127.0.0.1:8000/docs
 

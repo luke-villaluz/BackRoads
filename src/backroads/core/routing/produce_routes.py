@@ -5,7 +5,7 @@ import osmnx as ox
 
 from backroads.core.data.graph import load_graph
 from backroads.core.routing.weighting import add_travel_time, add_scenic_weights, add_composite_cost
-from backroads.core.routing.pathfinding import find_route, _nearest_node, _haversine_distance
+from backroads.core.routing.pathfinding import find_route, _nearest_node, _node_distance_heuristic
 from backroads.core.utils.streets import print_route_street_names
 
 '''
@@ -36,34 +36,38 @@ def compute_route(graph, origin, destination, extra_minutes,
         chosen_cost = fastest_result["cost"]
         chosen_weight = "travel_time"
     else:
-        # 2) Use k-candidate + ranking logic
-        routes = k_candidate_routes(graph, origin, destination,
-                                    weight="scenic_cost", k=10)
+        # 2) Use k-candidate + ranking logic (scenic candidates)
+        routes = k_candidate_routes(
+            graph, origin, destination,
+            weight="scenic_cost", k=10
+        )
 
         if not routes:
             chosen_nodes = fastest_nodes
             chosen_cost = fastest_result["cost"]
             chosen_weight = "travel_time"
-
         else:
+            # absolute time budget in seconds:
+            # fastest path time + extra_minutes
             allowed_time = fastest_time + extra_minutes * 60.0
-            time_budget_factor = allowed_time / fastest_time
 
             ranked = rank_routes(
                 graph,
                 routes,
-                time_budget_factor=time_budget_factor
+                max_time_seconds=allowed_time,
             )
 
             if ranked:
                 top_path, scenic_avg, time_seconds = ranked[0]
                 chosen_nodes = top_path
-                chosen_cost = time_seconds
-                chosen_weight = "scenic_cost"
+                chosen_cost = time_seconds      # actual travel_time of chosen scenic route
+                chosen_weight = "scenic_cost"   # chosen by scenic score within budget
             else:
+                # no scenic route within budget → fall back to pure fastest
                 chosen_nodes = fastest_nodes
                 chosen_cost = fastest_result["cost"]
                 chosen_weight = "travel_time"
+
 
     coords = [
         [graph.nodes[n]["x"], graph.nodes[n]["y"]]
@@ -100,16 +104,23 @@ def compute_route(graph, origin, destination, extra_minutes,
 
 
 # NOT kth shortest paths algo, this is literally returning more than 1 (k) routes
+from typing import List, Tuple
+import networkx as nx
+import osmnx as ox
+
 def k_candidate_routes(
     graph: nx.MultiDiGraph,
     origin: Tuple[float, float],
     destination: Tuple[float, float],
     weight: str = "scenic_cost",
-    k: int = 10,  # number of routes generated
+    k: int = 10,
 ) -> List[List[int]]:
     """
-    return up to k simple paths (lists of node ids) from origin→destination
-    ordered by total 'weight'
+    Return up to k simple paths (lists of node ids) from origin→destination,
+    ordered by total `weight`.
+
+    Uses NetworkX's shortest_simple_paths (Dijkstra-based).
+    Scenic weights are fully respected.
     """
     # nearest_nodes expects (x=lon, y=lat)
     o = ox.nearest_nodes(graph, origin[1], origin[0])
@@ -126,6 +137,7 @@ def k_candidate_routes(
             break
         routes.append(path)
     return routes
+
 
 def path_time(graph: nx.MultiDiGraph, path: List[int]) -> float:
     """sum edge['travel_time'] along a node path (total time for route)"""
@@ -146,11 +158,11 @@ def path_scenic_avg(graph: nx.MultiDiGraph, path: List[int]) -> float:
 def rank_routes(
     graph: nx.MultiDiGraph,
     routes: List[List[int]],
-    time_budget_factor: float = 2.00,  # 1.30 means willing to allow times slower by up to 30%
+    max_time_seconds: float,
 ) -> List[Tuple[List[int], float, float]]:
     """
-    keeps routes with total time less than or equal to fastest_time times budget factor
-    sort those routes by scenic average in descending order
+    Keep routes with total time <= max_time_seconds,
+    then sort those by scenic average in descending order.
 
     Returns:
         List of tuples: (path, scenic_avg, time_seconds)
@@ -158,12 +170,10 @@ def rank_routes(
     if not routes:
         return []
 
-    times = [path_time(graph, r) for r in routes]
-    fastest_time = min(times)
-
     kept: List[Tuple[List[int], float, float]] = []
-    for r, t in zip(routes, times):
-        if t <= fastest_time * time_budget_factor:
+    for r in routes:
+        t = path_time(graph, r)
+        if t <= max_time_seconds:
             kept.append((r, path_scenic_avg(graph, r), t))
 
     kept.sort(key=lambda x: x[1], reverse=True)  # scenic desc

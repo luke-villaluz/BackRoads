@@ -30,13 +30,14 @@ def find_route(origin, destination, graph, weight="scenic_cost"):
     """Return shortest path between two (lat, lon) points, using A*."""
     origin_node = _nearest_node(graph, origin)
     destination_node = _nearest_node(graph, destination)
+    h = lambda u, v=destination_node, _w=weight: _node_distance_heuristic(graph, u, v, _w)
 
     # A* path
     path = nx.astar_path(
         graph,
         source=origin_node,
         target=destination_node,
-        heuristic=lambda u, v=destination_node: _node_distance_heuristic(graph, u, v),
+        heuristic=h,
         weight=weight,
     )
 
@@ -45,7 +46,7 @@ def find_route(origin, destination, graph, weight="scenic_cost"):
         graph,
         source=origin_node,
         target=destination_node,
-        heuristic=lambda u, v=destination_node: _node_distance_heuristic(graph, u, v),
+        heuristic=h,
         weight=weight,
     )
 
@@ -54,21 +55,35 @@ def find_route(origin, destination, graph, weight="scenic_cost"):
         "cost": cost,
     }
 
-def _node_distance_heuristic(graph, u, v):
+def _node_distance_heuristic(graph, u, v, weight: str) -> float:
     """
-    Heuristic for A*: straight-line distance between nodes u and v,
-    based on their lat/lon stored as node attributes "y" (lat), "x" (lon).
+    Weight-aware heuristic for A*.
+
+    - For distance/time-like weights, use straight-line distance as a lower bound.
+    - For non-metric weights (like 'scenic_cost'), return 0 so we don't
+      distort the cost space.
     """
+    # If the weight is not geometric, don't use a distance heuristic
+    if weight not in {"travel_time"}:
+        return 0.0
+
     lat1 = graph.nodes[u].get("y")
     lon1 = graph.nodes[u].get("x")
     lat2 = graph.nodes[v].get("y")
     lon2 = graph.nodes[v].get("x")
 
-    # fallback if coords are missing (avoid breaking A*)
     if None in (lat1, lon1, lat2, lon2):
         return 0.0
 
-    return _haversine_distance(lat1, lon1, lat2, lon2)
+    # meters
+    dist_m = _haversine_distance(lat1, lon1, lat2, lon2)
+
+    if weight in {"travel_time", "time"}:
+        max_speed_mps = 35 / 3.6  # ~35 km/h as a conservative upper bound
+        return dist_m / max_speed_mps
+
+    return dist_m
+
 
 def _nearest_node(graph, point):
     lat, lon = point

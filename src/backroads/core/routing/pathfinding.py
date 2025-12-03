@@ -12,26 +12,63 @@ Algorithm:
 '''
 
 # default weight is travel time, essentially just takes fastest route
+import networkx as nx
+import osmnx as ox
+from math import radians, sin, cos, sqrt, atan2
+
+'''
+Pathfinding: 
+Finds a route between two coordinates using OpenStreetMap and NetworkX
+Uses the edge weights assigned by the weighting module 
+
+Algorithm: 
+    - A* with straight-line (haversine) distance as heuristic
+'''
+
+# default weight is "scenic_cost", but can be any edge attribute
 def find_route(origin, destination, graph, weight="scenic_cost"):
-    """return shortest path between two (lat, lon) points (by travel time) """
+    """Return shortest path between two (lat, lon) points, using A*."""
     origin_node = _nearest_node(graph, origin)
     destination_node = _nearest_node(graph, destination)
-    path = nx.shortest_path(
-        graph, 
-        source=origin_node, 
-        target=destination_node, 
-        weight=weight
-    )
-    cost = nx.shortest_path_length(
+
+    # A* path
+    path = nx.astar_path(
         graph,
         source=origin_node,
         target=destination_node,
-        weight=weight
+        heuristic=lambda u, v=destination_node: _node_distance_heuristic(graph, u, v),
+        weight=weight,
     )
+
+    # A* total path cost
+    cost = nx.astar_path_length(
+        graph,
+        source=origin_node,
+        target=destination_node,
+        heuristic=lambda u, v=destination_node: _node_distance_heuristic(graph, u, v),
+        weight=weight,
+    )
+
     return {
         "nodes": path,
         "cost": cost,
     }
+
+def _node_distance_heuristic(graph, u, v):
+    """
+    Heuristic for A*: straight-line distance between nodes u and v,
+    based on their lat/lon stored as node attributes "y" (lat), "x" (lon).
+    """
+    lat1 = graph.nodes[u].get("y")
+    lon1 = graph.nodes[u].get("x")
+    lat2 = graph.nodes[v].get("y")
+    lon2 = graph.nodes[v].get("x")
+
+    # fallback if coords are missing (avoid breaking A*)
+    if None in (lat1, lon1, lat2, lon2):
+        return 0.0
+
+    return _haversine_distance(lat1, lon1, lat2, lon2)
 
 def _nearest_node(graph, point):
     lat, lon = point

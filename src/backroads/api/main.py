@@ -80,7 +80,10 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """Initialize preset profiles on startup."""
-    initialize_preset_profiles()
+    try:
+        initialize_preset_profiles()
+    except Exception as e:
+        logging.error(f"Failed to initialize preset profiles: {e}", exc_info=True)
 
 class RouteRequest(BaseModel):
     start: Coordinate 

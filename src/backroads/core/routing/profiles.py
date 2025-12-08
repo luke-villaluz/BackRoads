@@ -75,53 +75,64 @@ def list_profiles() -> List[str]:
 
 def initialize_preset_profiles():
     """Initialize preset profiles (mountains, ocean) if they don't exist."""
-    CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
+    import logging
+    logger = logging.getLogger(__name__)
     
-    # Mountains profile - favor mountain/terrain features
-    # Values between 0 and 1, with 0.5 as default
-    mountains_natural = dict(DEFAULT_NATURAL_BY_TYPE)
-    # Boost mountain-related features (0.7-0.9 range)
-    mountains_natural.update({
-        "peak": 0.9,
-        "ridge": 0.85,
-        "cliff": 0.85,
-        "hill": 0.8,
-        "valley": 0.8,
-        "bare_rock": 0.8,
-        "saddle": 0.8,
-        "rock": 0.75,
-        "stone": 0.75,
-        "scree": 0.75,
-        "tree": 0.7,  # Mountains often have trees
-        "wood": 0.7,
-    })
-    
-    # Ocean profile - favor coastal/ocean features
-    # Values between 0 and 1, with 0.5 as default
-    ocean_natural = dict(DEFAULT_NATURAL_BY_TYPE)
-    # Boost ocean/coastal features (0.7-0.9 range)
-    ocean_natural.update({
-        "beach": 0.9,
-        "coastline": 0.9,
-        "bay": 0.85,
-        "cape": 0.85,
-        "water": 0.8,
-        "arch": 0.8,
-        "dune": 0.75,
-        "sand": 0.75,
-        "cliff": 0.75,  # Coastal cliffs
-    })
-    
-    # Use default scenic weights for both
-    mountains_scenic = dict(DEFAULT_SCENIC_BY_TYPE)
-    ocean_scenic = dict(DEFAULT_SCENIC_BY_TYPE)
-    
-    # Create profiles if they don't exist
-    for profile_name, scenic, natural in [
-        ("mountains", mountains_scenic, mountains_natural),
-        ("ocean", ocean_scenic, ocean_natural),
-    ]:
-        profile_path = get_profile_path(profile_name)
-        if not profile_path.exists():
-            save_profile(profile_name, scenic, natural)
+    try:
+        CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Initializing preset profiles in {CONFIGS_DIR}")
+        
+        # Mountains profile - favor mountain/terrain features
+        # Values between 0 and 1, with 0.5 as default
+        mountains_natural = dict(DEFAULT_NATURAL_BY_TYPE)
+        # Boost mountain-related features (0.7-0.9 range)
+        mountains_natural.update({
+            "peak": 0.9,
+            "ridge": 0.85,
+            "cliff": 0.85,
+            "hill": 0.8,
+            "valley": 0.8,
+            "bare_rock": 0.8,
+            "saddle": 0.8,
+            "rock": 0.75,
+            "stone": 0.75,
+            "scree": 0.75,
+            "tree": 0.7,  # Mountains often have trees
+            "wood": 0.7,
+        })
+        
+        # Ocean profile - favor coastal/ocean features
+        # Values between 0 and 1, with 0.5 as default
+        ocean_natural = dict(DEFAULT_NATURAL_BY_TYPE)
+        # Boost ocean/coastal features (0.7-0.9 range)
+        ocean_natural.update({
+            "beach": 0.9,
+            "coastline": 0.9,
+            "bay": 0.85,
+            "cape": 0.85,
+            "water": 0.8,
+            "arch": 0.8,
+            "dune": 0.75,
+            "sand": 0.75,
+            "cliff": 0.75,  # Coastal cliffs
+        })
+        
+        # Use default scenic weights for both
+        mountains_scenic = dict(DEFAULT_SCENIC_BY_TYPE)
+        ocean_scenic = dict(DEFAULT_SCENIC_BY_TYPE)
+        
+        # Create profiles if they don't exist
+        for profile_name, scenic, natural in [
+            ("mountains", mountains_scenic, mountains_natural),
+            ("ocean", ocean_scenic, ocean_natural),
+        ]:
+            profile_path = get_profile_path(profile_name)
+            if not profile_path.exists():
+                logger.info(f"Creating preset profile: {profile_name}")
+                save_profile(profile_name, scenic, natural)
+            else:
+                logger.info(f"Preset profile already exists: {profile_name}")
+    except Exception as e:
+        logger.error(f"Error initializing preset profiles: {e}", exc_info=True)
+        raise
 

@@ -1,0 +1,42 @@
+{
+  "name": "mountains",
+  "scenic_by_type": {
+    "motorway": 0.05,
+    "trunk": 0.25,
+    "primary": 0.4,
+    "secondary": 0.55,
+    "tertiary": 0.7,
+    "residential": 0.85,
+    "service": 0.7,
+    "unclassified": 0.9
+  },
+  "natural_by_type": {
+    "grassland": 0.5,
+    "heath": 0.5,
+    "scrub": 0.5,
+    "tree": 0.7,
+    "tree_row": 0.5,
+    "wood": 0.7,
+    "bay": 0.5,
+    "beach": 0.5,
+    "cape": 0.5,
+    "coastline": 0.5,
+    "hot_spring": 0.5,
+    "spring": 0.5,
+    "water": 0.5,
+    "wetland": 0.5,
+    "arch": 0.5,
+    "bare_rock": 0.8,
+    "cliff": 0.85,
+    "dune": 0.5,
+    "hill": 0.8,
+    "peak": 0.9,
+    "ridge": 0.85,
+    "rock": 0.75,
+    "saddle": 0.8,
+    "sand": 0.5,
+    "scree": 0.75,
+    "stone": 0.75,
+    "valley": 0.8
+  }
+}

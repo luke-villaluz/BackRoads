@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 from backroads.core.data.graph import load_graph
 from backroads.core.routing.weighting import (
@@ -16,6 +16,9 @@ from backroads.core.routing.directions import get_directions
 from backroads.core.routing.breakdown import get_scenic_breakdown
 from backroads.core.utils.geo import validate_coord_in_bounds, parse_coord
 from fastapi.responses import StreamingResponse
+from backroads.config import CONFIGS_DIR
+import json
+from pathlib import Path
 
 # backroads/api/main.py
 import logging
@@ -27,15 +30,7 @@ logging.basicConfig(
 
 CURRENT_SCENIC_BY_TYPE = dict(DEFAULT_SCENIC_BY_TYPE)
 CURRENT_NATURAL_BY_TYPE = dict(DEFAULT_NATURAL_BY_TYPE)
-
-# graph = load_graph()
-# add_travel_time(graph)
-# add_scenic_weights(
-#     graph,
-#     scenic_by_type=CURRENT_SCENIC_BY_TYPE,
-#     natural_by_type=CURRENT_NATURAL_BY_TYPE,
-# )
-# add_composite_cost(graph, alpha=0.5)
+graph = None  # Initialize graph as None
 
 
 class LoadGraphRequest(BaseModel):
@@ -111,6 +106,87 @@ class WeightsResponse(BaseModel):
 
 class VisualizeRequest(BaseModel):
     nodes: list[int]
+
+class ProfileCreateRequest(BaseModel):
+    name: str = Field(..., description="Name of the profile")
+    scenic_by_type: Optional[Dict[str, float]] = Field(
+        None,
+        example=DEFAULT_SCENIC_BY_TYPE,
+        description="Override some or all highway scenic weights. Omitted keys use defaults.",
+    )
+    natural_by_type: Optional[Dict[str, float]] = Field(
+        None,
+        example=DEFAULT_NATURAL_BY_TYPE,
+        description="Override some or all natural feature weights. Omitted keys use defaults.",
+    )
+
+class ProfileResponse(BaseModel):
+    name: str
+    scenic_by_type: Dict[str, float]
+    natural_by_type: Dict[str, float]
+
+class ProfileListResponse(BaseModel):
+    profiles: List[str]
+
+def _get_profile_path(profile_name: str) -> Path:
+    """Get the file path for a profile."""
+    # Sanitize profile name to be filesystem-safe
+    safe_name = "".join(c for c in profile_name if c.isalnum() or c in (' ', '-', '_')).strip()
+    safe_name = safe_name.replace(' ', '_')
+    if not safe_name:
+        raise ValueError("Profile name must contain at least one alphanumeric character")
+    return CONFIGS_DIR / f"{safe_name}.json"
+
+def _load_profile(profile_name: str) -> Dict[str, Any]:
+    """Load a profile from disk."""
+    if profile_name == "default":
+        return {
+            "scenic_by_type": dict(DEFAULT_SCENIC_BY_TYPE),
+            "natural_by_type": dict(DEFAULT_NATURAL_BY_TYPE),
+        }
+    
+    profile_path = _get_profile_path(profile_name)
+    if not profile_path.exists():
+        raise FileNotFoundError(f"Profile '{profile_name}' not found")
+    
+    with open(profile_path, 'r') as f:
+        return json.load(f)
+
+def _save_profile(profile_name: str, scenic_by_type: Dict[str, float], natural_by_type: Dict[str, float]) -> None:
+    """Save a profile to disk."""
+    if profile_name == "default":
+        raise ValueError("Cannot save a profile with name 'default'")
+    
+    # Ensure CONFIGS_DIR exists
+    CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
+    
+    profile_path = _get_profile_path(profile_name)
+    profile_data = {
+        "name": profile_name,
+        "scenic_by_type": scenic_by_type,
+        "natural_by_type": natural_by_type,
+    }
+    
+    with open(profile_path, 'w') as f:
+        json.dump(profile_data, f, indent=2)
+
+def _list_profiles() -> List[str]:
+    """List all available profiles."""
+    profiles = []
+    if not CONFIGS_DIR.exists():
+        return profiles
+    
+    for file_path in CONFIGS_DIR.glob("*.json"):
+        try:
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+                if isinstance(data, dict) and "name" in data:
+                    profiles.append(data["name"])
+        except (json.JSONDecodeError, KeyError):
+            # Skip invalid JSON files
+            continue
+    
+    return sorted(profiles)
 
 @app.post(
     "/graph/load",
@@ -212,14 +288,31 @@ def compute_route_endpoint(req: RouteRequest):
         # Likely GRAPH_BOUNDS / initialization issue
         raise HTTPException(status_code=500, detail=str(e))
 
+    # Load profile weights if a profile is specified
+    try:
+        if req.profile and req.profile != "default":
+            profile_data = _load_profile(req.profile)
+            scenic_weights = profile_data.get("scenic_by_type", DEFAULT_SCENIC_BY_TYPE)
+            natural_weights = profile_data.get("natural_by_type", DEFAULT_NATURAL_BY_TYPE)
+        else:
+            scenic_weights = CURRENT_SCENIC_BY_TYPE
+            natural_weights = CURRENT_NATURAL_BY_TYPE
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error loading profile: {e}",
+        )
+
     try:
         route = compute_route(
             graph,
             origin,
             destination,
             req.extra_minutes,
-            CURRENT_SCENIC_BY_TYPE,
-            CURRENT_NATURAL_BY_TYPE,
+            scenic_weights,
+            natural_weights,
             req.profile,
         )
     except Exception as e:
@@ -292,6 +385,64 @@ def apply_weights(payload: WeightsRequest):
 
     return WeightsResponse(scenic_by_type=scenic, natural_by_type=natural)
 
+
+@app.post(
+    "/profiles",
+    tags=["Customization"],
+    summary="Create or update a custom profile",
+    response_model=ProfileResponse,
+)
+def create_profile(payload: ProfileCreateRequest):
+    """
+    Create or update a custom profile with a name. Profiles can be reused
+    by specifying the profile name in route requests.
+    """
+    try:
+        # Start from defaults
+        scenic = dict(DEFAULT_SCENIC_BY_TYPE)
+        natural = dict(DEFAULT_NATURAL_BY_TYPE)
+
+        # Apply user overrides (if provided)
+        if payload.scenic_by_type:
+            scenic.update(payload.scenic_by_type)
+
+        if payload.natural_by_type:
+            natural.update(payload.natural_by_type)
+
+        # Save profile to disk
+        _save_profile(payload.name, scenic, natural)
+
+        return ProfileResponse(
+            name=payload.name,
+            scenic_by_type=scenic,
+            natural_by_type=natural,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error creating profile: {e}",
+        )
+
+@app.get(
+    "/profiles",
+    tags=["Customization"],
+    summary="List all available profiles",
+    response_model=ProfileListResponse,
+)
+def list_profiles():
+    """
+    Get a list of all saved custom profiles.
+    """
+    try:
+        profiles = _list_profiles()
+        return ProfileListResponse(profiles=profiles)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error listing profiles: {e}",
+        )
 
 
 @app.post(

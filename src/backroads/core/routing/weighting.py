@@ -167,21 +167,57 @@ def add_scenic_weights(
 
 #         # Composite cost: smaller is better
 #         data["scenic_cost"] = alpha * norm_time + (1.0 - alpha) * (1.0 - norm_scenic)
-def add_composite_cost(graph) -> None:
+def add_composite_cost(graph, lam: float = 1.0) -> None:
     """
-    Define a purely scenic cost:
+    Compute edge['scenic_cost'] as a composite of *time* and *scenery*:
 
-        scenic_cost = length / (scenic_score + ε)
+        scenic_cost = norm_time + lam * scenic_penalty
 
-    So:
-      - higher scenic_score → smaller scenic_cost
-      - longer edges are still a bit more expensive
+    where
+        norm_time      ∈ [0, 1], higher = slower
+        scenic_penalty ∈ [0, 1], higher = *less* scenic
+
+    Lower scenic_cost is better.
+
+    lam (lambda) is the trade-off:
+      - lam = 0   → pure fastest-time routing
+      - lam > 0   → accept some extra time for more scenery
     """
+    times = []
+    scenics = []
+
     for _, _, data in graph.edges(data=True):
-        length = float(data.get("length", 0.0))
+        times.append(float(data.get("travel_time", 0.0)))
+        scenics.append(float(data.get("scenic_score", 0.0)))
+
+    if not times or not scenics:
+        return
+
+    max_time = max(times) or 1.0
+    scenic_min = min(scenics)
+    scenic_max = max(scenics)
+
+    scenic_range = scenic_max - scenic_min if scenic_max > scenic_min else None
+
+    for _, _, data in graph.edges(data=True):
+        travel_time = float(data.get("travel_time", 0.0))
         scenic = float(data.get("scenic_score", 0.0))
 
-        data["scenic_cost"] = length / (scenic + 1e-6)
+        # 1) normalize time (0 = fastest, 1 = slowest)
+        norm_time = travel_time / max_time
+
+        # 2) normalize scenic so 0 = worst, 1 = best
+        if scenic_range is not None:
+            norm_scenic = (scenic - scenic_min) / scenic_range
+        else:
+            norm_scenic = 0.5
+
+        # 3) turn that into a *penalty* (higher = worse)
+        scenic_penalty = 1.0 - norm_scenic
+
+        # 4) final cost
+        data["scenic_cost"] = norm_time + lam * scenic_penalty
+
 
 
 
